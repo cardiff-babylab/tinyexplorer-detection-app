@@ -13,8 +13,7 @@
         "lint": "npm run main-lint && npm run react-lint",
         "start": "concurrently \"npm run react-start\" \"npm run main-start\"",
         "watch": "concurrently \"npm run main-watch\" \"npm run react-watch\"",
-        "build": "npm run python-build && npm run python-verify && npm run react-build && npm run main-build",
-        "postbuild": "npm run python-verify-smoke",
+        "build": "npm run react-build && npm run main-build",
         "main-lint": "tslint -c tslint.json -p tsconfig.electronMain.json",
         "main-start": "tsc -p tsconfig.electronMain.json && wait-on http://localhost:3000/ && cross-env NODE_ENV=development electron .",
         "main-watch": "tsc -w -p tsconfig.electronMain.json",
@@ -106,21 +105,6 @@
             "build/**"
         ],
         "extraResources": [
-            {
-                "from": "pythondist",
-                "to": "pythondist",
-                "filter": [
-                    "**/*",
-                    "!**/__pycache__/**",
-                    "!**/*.pyc",
-                    "!**/*.pyo",
-                    "!**/*.whl",
-                    "!**/include/**",
-                    "!**/*.h",
-                    "!**/*.hpp",
-                    "!**/*.hh"
-                ]
-            },
             {
                 "from": "resources",
                 "to": "resources",
