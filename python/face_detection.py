@@ -22,19 +22,45 @@ try:
 except ImportError as e:
     print(f"YOLO/Ultralytics not available: {e}", file=sys.stderr)
 
-# Try to import RetinaFace (Apple Silicon only)
+# Try to import RetinaFace (cross-platform; depends on installed packages)
 try:
-    import platform
-    is_darwin = sys.platform == 'darwin'
-    is_arm64 = platform.machine().lower() == 'arm64'
-    if is_darwin and is_arm64:
-        from retinaface import RetinaFace
-        RETINAFACE_AVAILABLE = True
-        print("RetinaFace loaded successfully", file=sys.stderr)
-    else:
-        print("RetinaFace disabled: only supported on Apple Silicon (arm64) Macs", file=sys.stderr)
+    from retinaface import RetinaFace  # type: ignore
+    RETINAFACE_AVAILABLE = True
+    print("RetinaFace loaded successfully", file=sys.stderr)
 except ImportError as e:
     print(f"RetinaFace not available: {e}", file=sys.stderr)
+
+def safe_imread(file_path: str):
+    """Robust image reader that handles Windows paths with spaces/unicode."""
+    try:
+        img = cv2.imread(file_path)
+        if img is not None:
+            return img
+    except Exception:
+        pass
+    try:
+        data = np.fromfile(file_path, dtype=np.uint8)
+        if data.size > 0:
+            img = cv2.imdecode(data, cv2.IMREAD_COLOR)
+            return img
+    except Exception:
+        pass
+    return None
+
+def safe_imwrite(file_path: str, image) -> bool:
+    """Robust image writer that handles Windows paths with spaces/unicode."""
+    try:
+        return cv2.imwrite(file_path, image)
+    except Exception:
+        try:
+            ext = os.path.splitext(file_path)[1] or '.jpg'
+            ok, encoded = cv2.imencode(ext, image)
+            if ok:
+                encoded.tofile(file_path)
+                return True
+        except Exception:
+            return False
+    return False
 
 class FaceDetectionProcessor:
     def __init__(self, progress_callback: Optional[Callable] = None, completion_callback: Optional[Callable] = None):
@@ -147,7 +173,7 @@ class FaceDetectionProcessor:
                 if not RETINAFACE_AVAILABLE:
                     if self.progress_callback:
                         self.progress_callback(f"{self.status_symbols['error']} RetinaFace is not available in this environment")
-                        self.progress_callback(f"{self.status_symbols['info']} Please use YOLO model or switch to an Apple Silicon Mac (arm64)")
+                        self.progress_callback(f"{self.status_symbols['info']} Ensure 'retina-face' and 'tensorflow' are installed in the active Python environment")
                     return False
                 
                 # RetinaFace doesn't need explicit loading - it loads models on first use
@@ -238,7 +264,7 @@ class FaceDetectionProcessor:
         """Process a single image for face detection"""
         try:
             # Load image
-            image = cv2.imread(image_path)
+            image = safe_imread(image_path)
             if image is None:
                 raise ValueError(f"Could not load image: {image_path}")
             
@@ -270,6 +296,10 @@ class FaceDetectionProcessor:
         self.results = []
         # Store confidence threshold for summary export
         self.current_confidence = confidence_threshold
+        # Normalize incoming paths to handle spaces and mixed separators reliably
+        folder_path = os.path.normpath(folder_path)
+        if results_folder:
+            results_folder = os.path.normpath(results_folder)
         
         # Send processing started event
         if self.completion_callback:
@@ -638,7 +668,7 @@ class FaceDetectionProcessor:
                     result_img_dir = os.path.join(result_folder, "results")
                     os.makedirs(result_img_dir, exist_ok=True)
                     result_img_path = os.path.join(result_img_dir, os.path.basename(image_path))
-                    cv2.imwrite(result_img_path, result_img)
+                    safe_imwrite(result_img_path, result_img)
                     
                 if self.progress_callback:
                     self.progress_callback(f"{self.status_symbols['face']} RetinaFace found {len(detections)} face(s)")
@@ -671,7 +701,7 @@ class FaceDetectionProcessor:
             result_img_dir = os.path.join(result_folder, "results")
             os.makedirs(result_img_dir, exist_ok=True)
             result_img_path = os.path.join(result_img_dir, os.path.basename(image_path))
-            cv2.imwrite(result_img_path, result_img)
+            safe_imwrite(result_img_path, result_img)
             
         except Exception as e:
             if self.progress_callback:
@@ -708,7 +738,7 @@ class FaceDetectionProcessor:
                 
                 # Save frame temporarily
                 temp_frame_path = os.path.join(result_folder, f'temp_frame_{frame_idx}.jpg')
-                cv2.imwrite(temp_frame_path, frame)
+                safe_imwrite(temp_frame_path, frame)
                 
                 # Process frame
                 detections = self.process_image(temp_frame_path, confidence_threshold, save_results=False)
@@ -899,7 +929,7 @@ class FaceDetectionProcessor:
         """Get list of available models (limited to match old_script.py)"""
         models = []
         
-        # Check if we're in development mode with dual environments
+        # Check if we're in development or packaged mode and whether known env folders exist
         import os
         script_dir = os.path.dirname(os.path.abspath(__file__))
         parent_dir = os.path.dirname(script_dir)
@@ -909,12 +939,41 @@ class FaceDetectionProcessor:
         has_yolo_env = os.path.exists(yolo_env_path)
         has_retinaface_env = os.path.exists(retinaface_env_path)
         
-        # In development mode with dual environments, show all models regardless of current environment
-        if has_yolo_env or has_retinaface_env:
-            print(f"Dual environment setup detected - showing all available models", file=sys.stderr)
+        # Also detect common conda env locations so we can list models even if current env differs
+        conda_env_dirs = []
+        try:
+            if os.name == 'nt':
+                candidates = [
+                    os.path.join(os.environ.get('USERPROFILE', ''), 'miniconda3', 'envs'),
+                    os.path.join(os.environ.get('USERPROFILE', ''), 'anaconda3', 'envs'),
+                    r'C:\\Miniconda3\\envs',
+                    r'C:\\ProgramData\\Miniconda3\\envs',
+                    r'C:\\Anaconda3\\envs',
+                ]
+            else:
+                candidates = [
+                    os.path.join(os.environ.get('HOME', ''), 'miniconda3', 'envs'),
+                    os.path.join(os.environ.get('HOME', ''), 'anaconda3', 'envs'),
+                    '/opt/homebrew/miniconda3/envs',
+                    '/opt/homebrew/anaconda3/envs',
+                ]
+            for d in candidates:
+                if d and os.path.exists(d):
+                    conda_env_dirs.append(d)
+        except Exception:
+            pass
+        
+        has_yolo_env_conda = any(os.path.exists(os.path.join(d, 'electron-python-yolo')) for d in conda_env_dirs)
+        has_retinaface_env_conda = any(os.path.exists(os.path.join(d, 'electron-python-retinaface')) for d in conda_env_dirs)
+        
+        has_yolo_sources = has_yolo_env or has_yolo_env_conda
+        has_retina_sources = has_retinaface_env or has_retinaface_env_conda
+        
+        # If we detect either environment (bundled or conda), show corresponding models regardless of current env
+        if has_yolo_sources or has_retina_sources:
+            print(f"Detected model environments - YOLO: {has_yolo_sources}, RetinaFace: {has_retina_sources}", file=sys.stderr)
             
-            # Always include YOLO models if YOLO environment exists
-            if has_yolo_env:
+            if has_yolo_sources:
                 models.extend([
                     "yolov8n-face.pt",
                     "yolov8m-face.pt", 
@@ -923,14 +982,19 @@ class FaceDetectionProcessor:
                     "yolov11l-face.pt",
                     "yolov12l-face.pt"
                 ])
-                print(f"YOLO environment detected at {yolo_env_path}, adding YOLO models", file=sys.stderr)
+                if has_yolo_env:
+                    print(f"YOLO environment detected at {yolo_env_path}, adding YOLO models", file=sys.stderr)
+                if has_yolo_env_conda:
+                    print("YOLO conda environment detected, adding YOLO models", file=sys.stderr)
             
-            # Always include RetinaFace if RetinaFace environment exists
-            if has_retinaface_env:
+            if has_retina_sources:
                 models.append("RetinaFace")
-                print(f"RetinaFace environment detected at {retinaface_env_path}, adding RetinaFace", file=sys.stderr)
+                if has_retinaface_env:
+                    print(f"RetinaFace environment detected at {retinaface_env_path}, adding RetinaFace", file=sys.stderr)
+                if has_retinaface_env_conda:
+                    print("RetinaFace conda environment detected, adding RetinaFace", file=sys.stderr)
         else:
-            # Single environment mode - only show models for available frameworks
+            # Single environment mode - only show models for available frameworks in the active environment
             if YOLO_AVAILABLE:
                 models.extend([
                     "yolov8n-face.pt",
@@ -940,7 +1004,6 @@ class FaceDetectionProcessor:
                     "yolov11l-face.pt",
                     "yolov12l-face.pt"
                 ])
-            
             if RETINAFACE_AVAILABLE:
                 models.append("RetinaFace")
         

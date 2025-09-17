@@ -14,6 +14,14 @@ import * as path from "path";
 // Disable GPU acceleration for better compatibility with remote displays and AppImages
 app.disableHardwareAcceleration();
 
+// Mitigate Windows cache permission issues when running from protected folders (e.g., OneDrive)
+if (process.platform === 'win32') {
+    const os = require('os');
+    const userData = path.join(os.homedir(), 'AppData', 'Roaming', 'TinyExplorer FaceDetectionApp');
+    app.setPath('userData', userData);
+    app.setPath('cache', path.join(userData, 'Cache'));
+}
+
 const isDev = (process.env.NODE_ENV === "development");
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null;

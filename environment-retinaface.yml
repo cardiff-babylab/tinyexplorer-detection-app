@@ -6,9 +6,7 @@ dependencies:
   - python=3.10
   - pip
   - pip:
-      - retina-face>=0.0.14
-      - tf-keras
-      - tensorflow
+      - retina-face
       - opencv-python
       - pillow
       - numpy

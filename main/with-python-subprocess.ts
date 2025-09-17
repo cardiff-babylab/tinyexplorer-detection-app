@@ -70,15 +70,20 @@ const initializePython = async () => {
         try { console.log("Running in packaged mode"); } catch (e) {}
         
         const resourcesBase = process.resourcesPath;
-        const yoloVenvPython = path.join(resourcesBase, PY_DIST_FOLDER, "yolo-env", "bin", process.platform === "win32" ? "python.exe" : "python");
-        const yoloVenvPython3 = path.join(resourcesBase, PY_DIST_FOLDER, "yolo-env", "bin", process.platform === "win32" ? "python.exe" : "python3");
-        const retinafaceVenvPython = path.join(resourcesBase, PY_DIST_FOLDER, "retinaface-env", "bin", process.platform === "win32" ? "python.exe" : "python");
-        const retinafaceVenvPython3 = path.join(resourcesBase, PY_DIST_FOLDER, "retinaface-env", "bin", process.platform === "win32" ? "python.exe" : "python3");
+        const isWindows = process.platform === "win32";
+        const venvBinDir = isWindows ? "Scripts" : "bin";
+        const pyName = isWindows ? "python.exe" : "python";
+        const yoloVenvPython = path.join(resourcesBase, PY_DIST_FOLDER, "yolo-env", venvBinDir, pyName);
+        const yoloVenvPython3 = isWindows ? "" : path.join(resourcesBase, PY_DIST_FOLDER, "yolo-env", venvBinDir, "python3");
+        const retinafaceVenvPython = path.join(resourcesBase, PY_DIST_FOLDER, "retinaface-env", venvBinDir, pyName);
+        const retinafaceVenvPython3 = isWindows ? "" : path.join(resourcesBase, PY_DIST_FOLDER, "retinaface-env", venvBinDir, "python3");
         const subprocessScriptPath = path.join(resourcesBase, PY_DIST_FOLDER, "python", "subprocess_api.py");
 
         // Prefer the relocatable standalone Python to avoid non-relocatable venv interpreter symlinks
-        const standalonePythonDir = path.join(resourcesBase, PY_DIST_FOLDER, "python-standalone");
-        const standalonePython = process.platform === "win32" 
+        const standalonePythonDir = isWindows
+            ? path.join(resourcesBase, PY_DIST_FOLDER, "python-windows")
+            : path.join(resourcesBase, PY_DIST_FOLDER, "python-standalone");
+        const standalonePython = isWindows
             ? path.join(standalonePythonDir, "python.exe")
             : path.join(standalonePythonDir, "bin", "python3.10");
         
@@ -95,7 +100,7 @@ const initializePython = async () => {
                 dialog.showErrorBox("Error", "Python environment not properly packaged");
                 return;
             }
-        } else if (fs.existsSync(retinafaceVenvPython) || fs.existsSync(retinafaceVenvPython3) || fs.existsSync(yoloVenvPython) || fs.existsSync(yoloVenvPython3)) {
+        } else if (fs.existsSync(retinafaceVenvPython) || (retinafaceVenvPython3 && fs.existsSync(retinafaceVenvPython3)) || fs.existsSync(yoloVenvPython) || (yoloVenvPython3 && fs.existsSync(yoloVenvPython3))) {
             // Fallback: use venv interpreters directly only if standalone missing
             const pickExisting = (...candidates: string[]): string | "" => {
                 for (const c of candidates) { if (c && fs.existsSync(c)) return c; }
@@ -119,25 +124,30 @@ const initializePython = async () => {
         // Development mode - support dual environment switching
         try { console.log("Running in development mode"); } catch (e) {}
         if (fs.existsSync(srcPath)) {
-            // Check for virtual environments in project directory first (most specific)
             const projectDir = path.join(__dirname, "..");
-            const yoloVenvPath = path.join(projectDir, "yolo-env", "bin", "python");
-            const retinaVenvPath = path.join(projectDir, "retinaface-env", "bin", "python");
-            
-            // Check for conda environments in common locations
-            const possibleCondaPaths = [
-                // macOS
-                `${process.env.HOME}/miniconda3/envs`,
-                `${process.env.HOME}/anaconda3/envs`,
-                `/opt/homebrew/anaconda3/envs`,
-                `/opt/homebrew/miniconda3/envs`,
-                // Linux
-                `/home/${process.env.USER}/miniconda3/envs`,
-                `/home/${process.env.USER}/anaconda3/envs`,
-                // Windows
-                `${process.env.USERPROFILE}\\miniconda3\\envs`,
-                `${process.env.USERPROFILE}\\anaconda3\\envs`,
-            ].filter(Boolean); // Remove any undefined paths
+            const isWindows = process.platform === "win32";
+            const venvBinDir = isWindows ? "Scripts" : "bin";
+            const pyName = isWindows ? "python.exe" : "python";
+            const yoloVenvPath = path.join(projectDir, "yolo-env", venvBinDir, pyName);
+            const retinaVenvPath = path.join(projectDir, "retinaface-env", venvBinDir, pyName);
+
+            // Check for conda environments in common locations (OS-specific ordering)
+            const possibleCondaPaths = (isWindows
+                ? [
+                    `${process.env.USERPROFILE}\\miniconda3\\envs`,
+                    `${process.env.USERPROFILE}\\anaconda3\\envs`,
+                    "C:\\Miniconda3\\envs",
+                    "C:\\ProgramData\\Miniconda3\\envs",
+                    "C:\\Anaconda3\\envs",
+                  ]
+                : [
+                    `${process.env.HOME}/miniconda3/envs`,
+                    `${process.env.HOME}/anaconda3/envs`,
+                    `/opt/homebrew/miniconda3/envs`,
+                    `/opt/homebrew/anaconda3/envs`,
+                    `/home/${process.env.USER}/miniconda3/envs`,
+                    `/home/${process.env.USER}/anaconda3/envs`,
+                  ]).filter(Boolean);
             
             // First try project-local virtual environments
             if (currentModelType === 'retinaface' && fs.existsSync(retinaVenvPath)) {
@@ -159,30 +169,44 @@ const initializePython = async () => {
                 
                 // Try to find the appropriate conda environment
                 if (condaBasePath) {
-                    const pythonExe = process.platform === "win32" ? "python.exe" : "python";
-                    const yoloEnvPath = path.join(condaBasePath, "electron-python-yolo", "bin", pythonExe);
-                    const retinaEnvPath = path.join(condaBasePath, "electron-python-retinaface", "bin", pythonExe);
-                    const fallbackPath = path.join(condaBasePath, "electron-python-sample", "bin", pythonExe);
-                    
-                    // Choose environment based on current model type
-                    if (currentModelType === 'retinaface' && fs.existsSync(retinaEnvPath)) {
+                    const pickExisting = (...candidates: string[]): string | "" => {
+                        for (const c of candidates) { if (c && fs.existsSync(c)) return c; }
+                        return "";
+                    };
+                    const yoloEnvPath = isWindows
+                        ? pickExisting(
+                            path.join(condaBasePath, "electron-python-yolo", "python.exe"),
+                            path.join(condaBasePath, "electron-python-yolo", "Scripts", "python.exe"),
+                          )
+                        : path.join(condaBasePath, "electron-python-yolo", "bin", "python");
+                    const retinaEnvPath = isWindows
+                        ? pickExisting(
+                            path.join(condaBasePath, "electron-python-retinaface", "python.exe"),
+                            path.join(condaBasePath, "electron-python-retinaface", "Scripts", "python.exe"),
+                          )
+                        : path.join(condaBasePath, "electron-python-retinaface", "bin", "python");
+                    const fallbackPath = isWindows
+                        ? pickExisting(
+                            path.join(condaBasePath, "electron-python-sample", "python.exe"),
+                            path.join(condaBasePath, "electron-python-sample", "Scripts", "python.exe"),
+                          )
+                        : path.join(condaBasePath, "electron-python-sample", "bin", "python");
+
+                    if (currentModelType === 'retinaface' && retinaEnvPath && fs.existsSync(retinaEnvPath)) {
                         pythonPath = retinaEnvPath;
                         try { console.log(`Using RetinaFace conda environment: ${pythonPath}`); } catch (e) {}
-                    } else if (currentModelType === 'yolo' && fs.existsSync(yoloEnvPath)) {
+                    } else if (currentModelType === 'yolo' && yoloEnvPath && fs.existsSync(yoloEnvPath)) {
                         pythonPath = yoloEnvPath;
                         try { console.log(`Using YOLO conda environment: ${pythonPath}`); } catch (e) {}
-                    } else if (fs.existsSync(fallbackPath)) {
-                        // Fallback to combined environment if dual environments not available
+                    } else if (fallbackPath && fs.existsSync(fallbackPath)) {
                         pythonPath = fallbackPath;
                         try { console.log(`Using fallback combined conda environment: ${pythonPath}`); } catch (e) {}
                     } else {
-                        // Use system Python as last resort
-                        pythonPath = process.platform === "win32" ? "python" : "python3";
+                        pythonPath = isWindows ? "python" : "python3";
                         try { console.log(`Using system Python: ${pythonPath}`); } catch (e) {}
                     }
                 } else {
-                    // No conda found, use system Python
-                    pythonPath = process.platform === "win32" ? "python" : "python3";
+                    pythonPath = isWindows ? "python" : "python3";
                     try { console.log(`No conda environments found, using system Python: ${pythonPath}`); } catch (e) {}
                 }
             }
@@ -224,8 +248,7 @@ const initializePython = async () => {
         ...process.env,
         // Ensure we don't pick up user's PYTHONPATH or user site-packages
         PYTHONNOUSERSITE: "1",
-        // Only expose our app's python scripts directory; do not inject yolo-env via python-deps
-        PYTHONPATH: `${bundledPyDir}`,
+        // Do not set PYTHONPATH to avoid shadowing bundled site-packages
         // Detach from any active virtual environment from the user's shell
         VIRTUAL_ENV: "",
         PYTHONHOME: "",
@@ -452,39 +475,8 @@ const sendCommandToPython = async (command: any, callback?: Function) => {
     // Check if we need to restart Python with a different environment
     let requiredModelType = detectModelType(command);
 
-    // Enforce RetinaFace support only on Apple Silicon (arm64)
-    if (requiredModelType === 'retinaface') {
-        const isDarwin = process.platform === 'darwin';
-        const isArm64 = process.arch === 'arm64';
-        if (!(isDarwin && isArm64)) {
-            try { console.warn('RetinaFace requested but this machine is not Apple Silicon (arm64). Falling back to YOLO.'); } catch (e) {}
-            // Inform user with a dialog once per request
-            try {
-                const detail = isDarwin && process.arch === 'x64'
-                    ? 'Your Mac appears to be Intel (x64). TensorFlow CPU builds require AVX instructions which many Intel Macs lack.'
-                    : `This platform (${process.platform}/${process.arch}) is not supported for RetinaFace.`;
-                dialog.showMessageBox({
-                    type: 'info',
-                    title: 'RetinaFace not supported on this machine',
-                    message: 'RetinaFace requires Apple Silicon (M‑series, arm64) with tensorflow‑macOS.',
-                    detail: `${detail}\nThe app will run YOLO instead.`,
-                });
-            } catch (e) { /* ignore dialog errors */ }
-
-            // Notify renderers
-            const allWindows = Electron.BrowserWindow.getAllWindows();
-            allWindows.forEach(window => {
-                window.webContents.send('python-event', {
-                    type: 'retinaface_unsupported',
-                    platform: process.platform,
-                    arch: process.arch,
-                    message: 'RetinaFace requires Apple Silicon (M‑series, arm64). Falling back to YOLO.'
-                });
-            });
-
-            requiredModelType = 'yolo';
-        }
-    }
+    // Allow RetinaFace on all platforms; Python will validate dependencies at runtime.
+    // If RetinaFace dependencies are missing, backend will report and UI can surface errors.
 
     if (requiredModelType !== currentModelType) {
         try { console.log(`Model type change detected: ${currentModelType} -> ${requiredModelType}`); } catch (e) {}

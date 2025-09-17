@@ -134,25 +134,20 @@ def setup_python_path(model_type='yolo'):
             print(f"  ❌ Ultralytics not available: {e}", file=sys.stderr)
     
     elif model_type == 'retinaface':
-        # Extra guard: only support on macOS arm64
-        is_darwin = sys.platform == 'darwin'
-        is_arm64 = (os.uname().machine == 'arm64') if hasattr(os, 'uname') else False
-        if not (is_darwin and is_arm64):
-            print("  ❌ RetinaFace is only supported on Apple Silicon (arm64) Macs. Falling back to YOLO.", file=sys.stderr)
-        else:
-            try:
-                # Set TensorFlow logging level to suppress AVX warnings
-                os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-                import tensorflow as tf
-                print(f"  ✅ TensorFlow {tf.__version__} available", file=sys.stderr)
-            except ImportError as e:
-                print(f"  ❌ TensorFlow not available for RetinaFace: {e}", file=sys.stderr)
-            
-            try:
-                import retinaface
-                print(f"  ✅ RetinaFace available", file=sys.stderr)
-            except ImportError as e:
-                print(f"  ❌ RetinaFace not available: {e}", file=sys.stderr)
+        # Cross-platform check: verify dependencies instead of hard-gating by platform
+        try:
+            # Reduce TF logs
+            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+            import tensorflow as tf  # noqa: F401
+            print(f"  ✅ TensorFlow available", file=sys.stderr)
+        except Exception as e:
+            print(f"  ❌ TensorFlow not available for RetinaFace: {e}", file=sys.stderr)
+        
+        try:
+            import retinaface  # noqa: F401
+            print(f"  ✅ RetinaFace available", file=sys.stderr)
+        except Exception as e:
+            print(f"  ❌ RetinaFace not available: {e}", file=sys.stderr)
     
     # Test common dependencies
     try:

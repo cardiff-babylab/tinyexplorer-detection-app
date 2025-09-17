@@ -14,6 +14,7 @@
         "start": "concurrently \"npm run react-start\" \"npm run main-start\"",
         "watch": "concurrently \"npm run main-watch\" \"npm run react-watch\"",
         "build": "npm run python-build && npm run python-verify && npm run react-build && npm run main-build",
+        "postbuild": "npm run python-verify-smoke",
         "main-lint": "tslint -c tslint.json -p tsconfig.electronMain.json",
         "main-start": "tsc -p tsconfig.electronMain.json && wait-on http://localhost:3000/ && cross-env NODE_ENV=development electron .",
         "main-watch": "tsc -w -p tsconfig.electronMain.json",
@@ -25,6 +26,7 @@
         "python-build": "node scripts/bundle-python.js",
         "python-build-standalone": "node scripts/bundle-python-standalone.js",
         "python-verify": "node scripts/verify-python-modules.js",
+        "python-verify-smoke": "cross-env SMOKE_TEST_YOLO=1 SMOKE_TEST_RETINAFACE=1 node scripts/verify-python-modules.js",
         "python-build-minimal": "shx rm -rf pythondist && shx mkdir -p pythondist && shx cp -r python/ pythondist/",
         "setup-dev-envs": "node -e \"console.log(process.platform === 'win32' ? 'Running Windows setup...' : 'Running Unix setup...')\" && node -e \"require('child_process').execSync(process.platform === 'win32' ? 'scripts\\\\setup-dev-environments.bat' : './scripts/setup-dev-environments.sh', {stdio: 'inherit'})\"",
         "test": "npm run test:gui",
@@ -112,13 +114,30 @@
                     "!**/__pycache__/**",
                     "!**/*.pyc",
                     "!**/*.pyo",
-                    "!**/*.pyd",
                     "!**/*.whl",
                     "!**/include/**",
                     "!**/*.h",
                     "!**/*.hpp",
                     "!**/*.hh"
                 ]
+            },
+            {
+                "from": "resources",
+                "to": "resources",
+                "filter": [
+                    "icons/**",
+                    "icon.png",
+                    "icon.ico",
+                    "icon.icns"
+                ]
+            },
+            {
+                "from": "graphics/icons/dragon-256.png",
+                "to": "."
+            },
+            {
+                "from": "graphics/icons/dragon-512.png",
+                "to": "."
             }
         ],
         "linux": {
@@ -170,16 +189,22 @@
             "internetEnabled": true
         },
         "win": {
-            "icon": "resources/icon.ico",
+            "icon": "graphics/icons/dragon-512.png",
             "target": [
                 {
-                    "target": "nsis",
+                    "target": "portable",
                     "arch": [
                         "x64"
                     ]
                 },
                 {
-                    "target": "zip",
+                    "target": "dir",
+                    "arch": [
+                        "x64"
+                    ]
+                },
+                {
+                    "target": "nsis",
                     "arch": [
                         "x64"
                     ]
@@ -193,7 +218,8 @@
             "perMachine": false,
             "warningsAsErrors": false,
             "artifactName": "${name}-${version}-setup.${ext}",
-            "deleteAppDataOnUninstall": false
+            "deleteAppDataOnUninstall": false,
+            "include": "resources/installer.nsh"
         },
         "appImage": {
             "desktop": "build/appimage/tinyexplorer-facedetectionapp.desktop",
