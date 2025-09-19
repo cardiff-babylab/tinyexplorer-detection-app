@@ -81,6 +81,7 @@ jobs:
       shell: bash
       env:
         SMOKE_TEST_YOLO: '1'
+        PYTHONIOENCODING: 'utf-8'
       run: |
         YOLO_PY="$(pwd)/pythondist/yolo-env/Scripts/python.exe"
 
@@ -129,6 +130,7 @@ jobs:
       shell: bash
       env:
         SMOKE_TEST_RETINAFACE: '1'
+        PYTHONIOENCODING: 'utf-8'
       run: |
         RF_PY="$(pwd)/pythondist/retinaface-env/Scripts/python.exe"
 
@@ -175,6 +177,7 @@ jobs:
         PIP_DISABLE_PIP_VERSION_CHECK: '1'
         SMOKE_TEST_YOLO: '1'
         SMOKE_TEST_RETINAFACE: '1'
+        PYTHONIOENCODING: 'utf-8'
 
     - name: Build React app
       shell: pwsh
