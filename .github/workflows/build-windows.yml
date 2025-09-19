@@ -17,20 +17,6 @@ jobs:
       with:
         node-version: '18'
 
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-
-    - name: Force expose python3.10 & set build env vars
-      shell: pwsh
-      run: |
-        Write-Host "Python at $env:pythonLocation\python.exe"
-        & $env:pythonLocation\python.exe --version
-        # actions/setup-python places the interpreter in pythonLocation; set env vars
-        Add-Content -Path $env:GITHUB_ENV -Value "BUNDLED_PYTHON_310=$($env:pythonLocation)\python.exe"
-        Add-Content -Path $env:GITHUB_ENV -Value "RETINAFACE_PYTHON=$($env:pythonLocation)\python.exe"
-        Add-Content -Path $env:GITHUB_ENV -Value "PYTHON_FOR_RETINAFACE=$($env:pythonLocation)\python.exe"
 
     - name: Install Node dependencies
       run: npm install
@@ -95,7 +81,6 @@ jobs:
         npx electron-builder --win --x64 --publish=never
       env:
         ELECTRON_BUILDER_CACHE: ${{ runner.temp }}\electron-builder-cache
-        PYTHON: python
 
     - name: List build artifacts
       run: dir dist\ || echo "No dist directory"
