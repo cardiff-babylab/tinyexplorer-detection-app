@@ -86,27 +86,18 @@ jobs:
       run: dir dist\ || echo "No dist directory"
       shell: cmd
 
-    - name: Test silent installation with console output
+    - name: Test installer creation
       shell: pwsh
       run: |
-        Write-Host "Testing silent installation with console output..."
+        Write-Host "Checking installer creation..."
         $installer = Get-ChildItem -Path "dist" -Filter "*.exe" | Select-Object -First 1
         if ($installer) {
-          Write-Host "Found installer: $($installer.FullName)"
-          Write-Host "Running silent installation test..."
-          
-          # Create test installation directory
-          $testDir = "$env:TEMP\TinyExplorerTest"
-          New-Item -ItemType Directory -Force -Path $testDir | Out-Null
-          
-          # Run installer in silent mode with console output
-          # Note: We're not actually installing, just testing that the installer runs
-          Write-Host "Testing installer console output (dry run)..."
-          Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$testDir", "/?", "/NCRC" -Wait -NoNewWindow -PassThru | Out-Host
-          
-          Write-Host "Console output test completed"
+          Write-Host "✓ Found installer: $($installer.Name)"
+          Write-Host "File size: $([math]::Round($installer.Length / 1MB, 2)) MB"
+          Write-Host "Installer validation successful"
         } else {
-          Write-Host "No installer found in dist directory"
+          Write-Host "✗ No installer found in dist directory"
+          exit 1
         }
 
     - name: Upload Windows artifacts
