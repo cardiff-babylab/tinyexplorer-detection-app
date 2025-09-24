@@ -61,10 +61,12 @@ See also: [Supported File Formats](main-features.md#supported-file-formats) and 
 
 **© Cardiff Babylab**
 
-**Concept and Project Management:** Teodor Nikolov & Hana D'Souza
-**Lead Development and Implementation:** Tamas Foldes
-**Code Contributions:** Ziye Zhang & Teodor Nikolov
+### Project Team
+
+- **Concept and Project Management:** Teodor Nikolov & Hana D'Souza
+- **Lead Development and Implementation:** Tamas Foldes
+- **Code Contributions:** Ziye Zhang & Teodor Nikolov
 
 ## Funding
 
-This work was supported by a James S. McDonnell Foundation (JSMF) Opportunity Award (https://doi.org/10.37717/2022-3711) and a UKRI Future Leaders Fellowship (MR/X032922/1) awarded to HD.
+This work was supported by a [James S. McDonnell Foundation (JSMF) Opportunity Award](https://doi.org/10.37717/2022-3711) and a UKRI Future Leaders Fellowship (MR/X032922/1) awarded to HD.
