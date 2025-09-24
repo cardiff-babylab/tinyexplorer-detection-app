@@ -1,14 +1,20 @@
-{% extends "base.html" %}
-
-{% block footer %}
-  {{ super() }}
-
-  <!-- Custom funding footer -->
-  <div class="md-footer-meta__funding" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--md-default-fg-color--lightest); font-size: 0.8rem; color: var(--md-default-fg-color--light);">
-    <div class="md-footer-meta__funding-content">
-      <strong>Funding:</strong> This work was supported by a James S. McDonnell Foundation (JSMF) Opportunity Award
-      (<a href="https://doi.org/10.37717/2022-3711" style="color: var(--md-accent-fg-color);">https://doi.org/10.37717/2022-3711</a>)
-      and a UKRI Future Leaders Fellowship (MR/X032922/1) awarded to HD.
+<!-- Material for MkDocs footer override -->
+<div class="md-footer">
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+        <div class="md-copyright__highlight">
+          Made with
+          <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+            Material for MkDocs
+          </a>
+        </div>
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--md-default-fg-color--lightest); font-size: 0.8rem; color: var(--md-default-fg-color--light);">
+          <strong>Funding:</strong> This work was supported by a James S. McDonnell Foundation (JSMF) Opportunity Award
+          (<a href="https://doi.org/10.37717/2022-3711" style="color: var(--md-accent-fg-color);">https://doi.org/10.37717/2022-3711</a>)
+          and a UKRI Future Leaders Fellowship (MR/X032922/1) awarded to HD.
+        </div>
+      </div>
     </div>
   </div>
-{% endblock %}
+</div>
