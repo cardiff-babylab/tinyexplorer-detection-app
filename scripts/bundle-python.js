@@ -296,15 +296,10 @@ async function setupEnvironments() {
         const yoloPyvenvCfg = path.join(yoloEnvDir, 'pyvenv.cfg');
         if (fs.existsSync(yoloPyvenvCfg)) {
             let cfg = fs.readFileSync(yoloPyvenvCfg, 'utf8');
-            // Remove or comment out the 'home' line which contains absolute path
-            cfg = cfg.split('\n').map(line => {
-                if (line.trim().startsWith('home =')) {
-                    return '# ' + line + ' # Removed for relocatability';
-                }
-                return line;
-            }).join('\n');
+            // Remove the 'home' line which contains absolute CI path - venv will use relative paths
+            cfg = cfg.split('\n').filter(line => !line.trim().startsWith('home =')).join('\n');
             fs.writeFileSync(yoloPyvenvCfg, cfg, 'utf8');
-            console.log('Made YOLO venv relocatable');
+            console.log('Made YOLO venv relocatable by removing absolute home path');
         }
         
         // Install YOLO packages
@@ -364,15 +359,10 @@ async function setupEnvironments() {
             const retinafacePyvenvCfg = path.join(retinafaceEnvDir, 'pyvenv.cfg');
             if (fs.existsSync(retinafacePyvenvCfg)) {
                 let cfg = fs.readFileSync(retinafacePyvenvCfg, 'utf8');
-                // Remove or comment out the 'home' line which contains absolute path
-                cfg = cfg.split('\n').map(line => {
-                    if (line.trim().startsWith('home =')) {
-                        return '# ' + line + ' # Removed for relocatability';
-                    }
-                    return line;
-                }).join('\n');
+                // Remove the 'home' line which contains absolute CI path - venv will use relative paths
+                cfg = cfg.split('\n').filter(line => !line.trim().startsWith('home =')).join('\n');
                 fs.writeFileSync(retinafacePyvenvCfg, cfg, 'utf8');
-                console.log('Made RetinaFace venv relocatable');
+                console.log('Made RetinaFace venv relocatable by removing absolute home path');
             }
 
             console.log('Installing RetinaFace packages...');
