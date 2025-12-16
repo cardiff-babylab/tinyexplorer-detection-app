@@ -131,7 +131,19 @@ async function downloadWindowsPython() {
 }
 
 async function ensureBundledPython310() {
-    // 1. Direct override path
+    // 1. On Windows, always download standalone Python for bundling (ignore env override)
+    //    This ensures we have python-windows for venv relocation
+    if (process.platform === 'win32') {
+        try {
+            const standalone = await downloadWindowsPython();
+            console.log(`Using standalone Windows Python for bundling: ${standalone}`);
+            return standalone;
+        } catch (error) {
+            console.warn('Failed to download standalone Python, trying env override...');
+        }
+    }
+
+    // 2. Direct override path (non-Windows or fallback)
     const override = process.env.BUNDLED_PYTHON_310;
     if (override) {
         try { execSync(`"${override}" --version`, { stdio: 'ignore' }); console.log(`Using BUNDLED_PYTHON_310: ${override}`); return override; } catch { console.warn('Override invalid, continuing.'); }
