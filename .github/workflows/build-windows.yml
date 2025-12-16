@@ -83,7 +83,8 @@ jobs:
         SMOKE_TEST_YOLO: '1'
         PYTHONIOENCODING: 'utf-8'
       run: |
-        YOLO_PY="$(pwd)/pythondist/yolo-env/Scripts/python.exe"
+        # On Windows, we use standalone Python (no venv), so python.exe is at root
+        YOLO_PY="$(pwd)/pythondist/yolo-env/python.exe"
 
         # Verify core YOLO requirements
         "$YOLO_PY" - <<'PY'
@@ -132,7 +133,8 @@ jobs:
         SMOKE_TEST_RETINAFACE: '1'
         PYTHONIOENCODING: 'utf-8'
       run: |
-        RF_PY="$(pwd)/pythondist/retinaface-env/Scripts/python.exe"
+        # On Windows, we use standalone Python (no venv), so python.exe is at root
+        RF_PY="$(pwd)/pythondist/retinaface-env/python.exe"
 
         # Verify all requirements
         "$RF_PY" - <<'PY'
