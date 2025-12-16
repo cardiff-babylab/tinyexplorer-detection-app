@@ -71,7 +71,9 @@ const initializePython = async () => {
         
         const resourcesBase = process.resourcesPath;
         const isWindows = process.platform === "win32";
-        const venvBinDir = isWindows ? "Scripts" : "bin";
+        // On Windows, we use standalone Python (no venv), so python.exe is at root of env directories
+        // On Unix, we use venv, so python is in bin/ subdirectory
+        const venvBinDir = isWindows ? "" : "bin";
         const pyName = isWindows ? "python.exe" : "python";
         const yoloVenvPython = path.join(resourcesBase, PY_DIST_FOLDER, "yolo-env", venvBinDir, pyName);
         const yoloVenvPython3 = isWindows ? "" : path.join(resourcesBase, PY_DIST_FOLDER, "yolo-env", venvBinDir, "python3");
@@ -126,10 +128,21 @@ const initializePython = async () => {
         if (fs.existsSync(srcPath)) {
             const projectDir = path.join(__dirname, "..");
             const isWindows = process.platform === "win32";
+            // On Windows, dev mode can use standalone Python (no venv) or venv
+            // Check which structure exists
             const venvBinDir = isWindows ? "Scripts" : "bin";
             const pyName = isWindows ? "python.exe" : "python";
-            const yoloVenvPath = path.join(projectDir, "yolo-env", venvBinDir, pyName);
-            const retinaVenvPath = path.join(projectDir, "retinaface-env", venvBinDir, pyName);
+
+            // Try standalone structure first (python.exe at root), then venv structure (Scripts/python.exe)
+            let yoloVenvPath = path.join(projectDir, "yolo-env", pyName);
+            if (isWindows && !fs.existsSync(yoloVenvPath)) {
+                yoloVenvPath = path.join(projectDir, "yolo-env", venvBinDir, pyName);
+            }
+
+            let retinaVenvPath = path.join(projectDir, "retinaface-env", pyName);
+            if (isWindows && !fs.existsSync(retinaVenvPath)) {
+                retinaVenvPath = path.join(projectDir, "retinaface-env", venvBinDir, pyName);
+            }
 
             // Check for conda environments in common locations (OS-specific ordering)
             const possibleCondaPaths = (isWindows

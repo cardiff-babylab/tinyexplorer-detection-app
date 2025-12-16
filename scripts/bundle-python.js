@@ -295,37 +295,36 @@ const retinafaceRequirementsPath = path.join(__dirname, '..', 'python', 'require
 // Main async function
 async function setupEnvironments() {
     try {
-        console.log('Creating virtual environments for better package isolation...');
-        
-        // Create YOLO virtual environment
-        console.log('Creating YOLO virtual environment...');
-        const pyForYolo = await ensureBundledPython310();
-        console.log(`Using ${pyForYolo} to create YOLO virtual environment...`);
-        // Use --copies to ensure executables are copied, not symlinked (better for relocation)
-        execSync(`"${pyForYolo}" -m venv --copies "${yoloEnvDir}"`, { stdio: 'inherit' });
+        // On Windows, don't use venv - just copy standalone Python for better relocatability
+        const isWindows = process.platform === 'win32';
 
-        // Make venv relocatable by using relative path to bundled Python (Windows only)
-        if (process.platform === 'win32') {
-            const yoloPyvenvCfg = path.join(yoloEnvDir, 'pyvenv.cfg');
-            if (fs.existsSync(yoloPyvenvCfg)) {
-                let cfg = fs.readFileSync(yoloPyvenvCfg, 'utf8');
-                // Replace absolute CI path with relative path to bundled Python
-                const relativePythonPath = '..\\python-windows';
-                cfg = cfg.split('\n').map(line => {
-                    if (line.trim().startsWith('home =')) {
-                        return `home = ${relativePythonPath}`;
-                    }
-                    return line;
-                }).join('\n');
-                fs.writeFileSync(yoloPyvenvCfg, cfg, 'utf8');
-                console.log(`Made YOLO venv relocatable with relative path: ${relativePythonPath}`);
-            }
+        if (isWindows) {
+            console.log('Setting up standalone Python environments for Windows (no venv)...');
+            const basePython = await ensureBundledPython310();
+            const basePythonDir = path.dirname(basePython);
+
+            // Copy python-windows to yolo-env and retinaface-env
+            console.log('Copying standalone Python to yolo-env...');
+            copyRecursiveSync(basePythonDir, yoloEnvDir);
+
+            console.log('Copying standalone Python to retinaface-env...');
+            copyRecursiveSync(basePythonDir, retinafaceEnvDir);
+
+            console.log('Windows standalone Python environments ready (relocatable, no venv)');
+        } else {
+            console.log('Creating virtual environments for better package isolation...');
+
+            // Create YOLO virtual environment (Unix)
+            console.log('Creating YOLO virtual environment...');
+            const pyForYolo = await ensureBundledPython310();
+            console.log(`Using ${pyForYolo} to create YOLO virtual environment...`);
+            execSync(`"${pyForYolo}" -m venv --copies "${yoloEnvDir}"`, { stdio: 'inherit' });
         }
-        
+
         // Install YOLO packages
         console.log('Installing YOLO packages...');
-        const yoloPython = process.platform === 'win32'
-            ? path.join(yoloEnvDir, 'Scripts', 'python.exe')
+        const yoloPython = isWindows
+            ? path.join(yoloEnvDir, 'python.exe')
             : path.join(yoloEnvDir, 'bin', 'python');
 
         // Upgrade pip first
@@ -367,35 +366,18 @@ async function setupEnvironments() {
             }
         }
         
-        // Create RetinaFace virtual environment
-        console.log('Creating RetinaFace virtual environment...');
+        // Create RetinaFace virtual environment (Unix only, Windows already has standalone copy)
+        console.log('Setting up RetinaFace environment...');
         try {
-            const retinafacePythonSystem = await findPythonForRetinaFace();
-            console.log(`Selected system Python for RetinaFace venv: ${retinafacePythonSystem}`);
-            // Use --copies to ensure executables are copied, not symlinked (better for relocation)
-            execSync(`"${retinafacePythonSystem}" -m venv --copies "${retinafaceEnvDir}"`, { stdio: 'inherit' });
-
-            // Make venv relocatable by using relative path to bundled Python (Windows only)
-            if (process.platform === 'win32') {
-                const retinafacePyvenvCfg = path.join(retinafaceEnvDir, 'pyvenv.cfg');
-                if (fs.existsSync(retinafacePyvenvCfg)) {
-                    let cfg = fs.readFileSync(retinafacePyvenvCfg, 'utf8');
-                    // Replace absolute CI path with relative path to bundled Python
-                    const relativePythonPath = '..\\python-windows';
-                    cfg = cfg.split('\n').map(line => {
-                        if (line.trim().startsWith('home =')) {
-                            return `home = ${relativePythonPath}`;
-                        }
-                        return line;
-                    }).join('\n');
-                    fs.writeFileSync(retinafacePyvenvCfg, cfg, 'utf8');
-                    console.log(`Made RetinaFace venv relocatable with relative path: ${relativePythonPath}`);
-                }
+            if (!isWindows) {
+                const retinafacePythonSystem = await findPythonForRetinaFace();
+                console.log(`Selected system Python for RetinaFace venv: ${retinafacePythonSystem}`);
+                execSync(`"${retinafacePythonSystem}" -m venv --copies "${retinafaceEnvDir}"`, { stdio: 'inherit' });
             }
 
             console.log('Installing RetinaFace packages...');
-            const retinafacePython = process.platform === 'win32'
-                ? path.join(retinafaceEnvDir, 'Scripts', 'python.exe')
+            const retinafacePython = isWindows
+                ? path.join(retinafaceEnvDir, 'python.exe')
                 : path.join(retinafaceEnvDir, 'bin', 'python');
 
             // Verify Python version compatibility
