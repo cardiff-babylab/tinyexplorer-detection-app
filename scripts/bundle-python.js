@@ -289,7 +289,23 @@ async function setupEnvironments() {
         console.log('Creating YOLO virtual environment...');
         const pyForYolo = await ensureBundledPython310();
         console.log(`Using ${pyForYolo} to create YOLO virtual environment...`);
-        execSync(`"${pyForYolo}" -m venv "${yoloEnvDir}"`, { stdio: 'inherit' });
+        // Use --copies to ensure executables are copied, not symlinked (better for relocation)
+        execSync(`"${pyForYolo}" -m venv --copies "${yoloEnvDir}"`, { stdio: 'inherit' });
+
+        // Make venv relocatable by removing absolute path reference
+        const yoloPyvenvCfg = path.join(yoloEnvDir, 'pyvenv.cfg');
+        if (fs.existsSync(yoloPyvenvCfg)) {
+            let cfg = fs.readFileSync(yoloPyvenvCfg, 'utf8');
+            // Remove or comment out the 'home' line which contains absolute path
+            cfg = cfg.split('\n').map(line => {
+                if (line.trim().startsWith('home =')) {
+                    return '# ' + line + ' # Removed for relocatability';
+                }
+                return line;
+            }).join('\n');
+            fs.writeFileSync(yoloPyvenvCfg, cfg, 'utf8');
+            console.log('Made YOLO venv relocatable');
+        }
         
         // Install YOLO packages
         console.log('Installing YOLO packages...');
@@ -341,7 +357,23 @@ async function setupEnvironments() {
         try {
             const retinafacePythonSystem = await findPythonForRetinaFace();
             console.log(`Selected system Python for RetinaFace venv: ${retinafacePythonSystem}`);
-            execSync(`"${retinafacePythonSystem}" -m venv "${retinafaceEnvDir}"`, { stdio: 'inherit' });
+            // Use --copies to ensure executables are copied, not symlinked (better for relocation)
+            execSync(`"${retinafacePythonSystem}" -m venv --copies "${retinafaceEnvDir}"`, { stdio: 'inherit' });
+
+            // Make venv relocatable by removing absolute path reference
+            const retinafacePyvenvCfg = path.join(retinafaceEnvDir, 'pyvenv.cfg');
+            if (fs.existsSync(retinafacePyvenvCfg)) {
+                let cfg = fs.readFileSync(retinafacePyvenvCfg, 'utf8');
+                // Remove or comment out the 'home' line which contains absolute path
+                cfg = cfg.split('\n').map(line => {
+                    if (line.trim().startsWith('home =')) {
+                        return '# ' + line + ' # Removed for relocatability';
+                    }
+                    return line;
+                }).join('\n');
+                fs.writeFileSync(retinafacePyvenvCfg, cfg, 'utf8');
+                console.log('Made RetinaFace venv relocatable');
+            }
 
             console.log('Installing RetinaFace packages...');
             const retinafacePython = process.platform === 'win32'
