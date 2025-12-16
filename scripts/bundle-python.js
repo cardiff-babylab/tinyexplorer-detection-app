@@ -292,14 +292,22 @@ async function setupEnvironments() {
         // Use --copies to ensure executables are copied, not symlinked (better for relocation)
         execSync(`"${pyForYolo}" -m venv --copies "${yoloEnvDir}"`, { stdio: 'inherit' });
 
-        // Make venv relocatable by removing absolute path reference
-        const yoloPyvenvCfg = path.join(yoloEnvDir, 'pyvenv.cfg');
-        if (fs.existsSync(yoloPyvenvCfg)) {
-            let cfg = fs.readFileSync(yoloPyvenvCfg, 'utf8');
-            // Remove the 'home' line which contains absolute CI path - venv will use relative paths
-            cfg = cfg.split('\n').filter(line => !line.trim().startsWith('home =')).join('\n');
-            fs.writeFileSync(yoloPyvenvCfg, cfg, 'utf8');
-            console.log('Made YOLO venv relocatable by removing absolute home path');
+        // Make venv relocatable by using relative path to bundled Python (Windows only)
+        if (process.platform === 'win32') {
+            const yoloPyvenvCfg = path.join(yoloEnvDir, 'pyvenv.cfg');
+            if (fs.existsSync(yoloPyvenvCfg)) {
+                let cfg = fs.readFileSync(yoloPyvenvCfg, 'utf8');
+                // Replace absolute CI path with relative path to bundled Python
+                const relativePythonPath = '..\\python-windows';
+                cfg = cfg.split('\n').map(line => {
+                    if (line.trim().startsWith('home =')) {
+                        return `home = ${relativePythonPath}`;
+                    }
+                    return line;
+                }).join('\n');
+                fs.writeFileSync(yoloPyvenvCfg, cfg, 'utf8');
+                console.log(`Made YOLO venv relocatable with relative path: ${relativePythonPath}`);
+            }
         }
         
         // Install YOLO packages
@@ -355,14 +363,22 @@ async function setupEnvironments() {
             // Use --copies to ensure executables are copied, not symlinked (better for relocation)
             execSync(`"${retinafacePythonSystem}" -m venv --copies "${retinafaceEnvDir}"`, { stdio: 'inherit' });
 
-            // Make venv relocatable by removing absolute path reference
-            const retinafacePyvenvCfg = path.join(retinafaceEnvDir, 'pyvenv.cfg');
-            if (fs.existsSync(retinafacePyvenvCfg)) {
-                let cfg = fs.readFileSync(retinafacePyvenvCfg, 'utf8');
-                // Remove the 'home' line which contains absolute CI path - venv will use relative paths
-                cfg = cfg.split('\n').filter(line => !line.trim().startsWith('home =')).join('\n');
-                fs.writeFileSync(retinafacePyvenvCfg, cfg, 'utf8');
-                console.log('Made RetinaFace venv relocatable by removing absolute home path');
+            // Make venv relocatable by using relative path to bundled Python (Windows only)
+            if (process.platform === 'win32') {
+                const retinafacePyvenvCfg = path.join(retinafaceEnvDir, 'pyvenv.cfg');
+                if (fs.existsSync(retinafacePyvenvCfg)) {
+                    let cfg = fs.readFileSync(retinafacePyvenvCfg, 'utf8');
+                    // Replace absolute CI path with relative path to bundled Python
+                    const relativePythonPath = '..\\python-windows';
+                    cfg = cfg.split('\n').map(line => {
+                        if (line.trim().startsWith('home =')) {
+                            return `home = ${relativePythonPath}`;
+                        }
+                        return line;
+                    }).join('\n');
+                    fs.writeFileSync(retinafacePyvenvCfg, cfg, 'utf8');
+                    console.log(`Made RetinaFace venv relocatable with relative path: ${relativePythonPath}`);
+                }
             }
 
             console.log('Installing RetinaFace packages...');
