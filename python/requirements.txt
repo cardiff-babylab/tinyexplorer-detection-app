@@ -1,0 +1,12 @@
+flask
+flask-cors
+graphene>=3.0
+flask-graphql>=2.0
+ultralytics
+opencv-python
+pillow
+numpy
+torch
+torchvision
+dill
+omegaconf
