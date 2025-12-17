@@ -584,10 +584,43 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#build-from-source-temporary-solution" class="md-nav__link">
+  <a href="#step-1-download-the-installer" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Build from Source (Temporary Solution)
+        Step 1: Download the Installer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-run-the-installer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Run the Installer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-complete-installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Complete Installation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-launch-the-application" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Launch the Application
       
     </span>
   </a>
@@ -612,7 +645,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#build-from-source-temporary-solution_1" class="md-nav__link">
+  <a href="#build-from-source-temporary-solution" class="md-nav__link">
     <span class="md-ellipsis">
       
         Build from Source (Temporary Solution)
@@ -936,10 +969,43 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#build-from-source-temporary-solution" class="md-nav__link">
+  <a href="#step-1-download-the-installer" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Build from Source (Temporary Solution)
+        Step 1: Download the Installer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-run-the-installer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Run the Installer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-complete-installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Complete Installation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-launch-the-application" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Launch the Application
       
     </span>
   </a>
@@ -964,7 +1030,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#build-from-source-temporary-solution_1" class="md-nav__link">
+  <a href="#build-from-source-temporary-solution" class="md-nav__link">
     <span class="md-ellipsis">
       
         Build from Source (Temporary Solution)
@@ -1095,24 +1161,51 @@
 </div>
 <div class="tabbed-block">
 <h3 id="windows-installation-guide">Windows Installation Guide<a class="headerlink" href="#windows-installation-guide" title="Permanent link">&para;</a></h3>
-<div class="admonition warning">
-<p class="admonition-title">Coming Soon</p>
-<p>Windows installer is currently in development. Please check back later or build from source using the instructions below.</p>
-</div>
-<h4 id="build-from-source-temporary-solution">Build from Source (Temporary Solution)<a class="headerlink" href="#build-from-source-temporary-solution" title="Permanent link">&para;</a></h4>
+<p>Since TinyExplorer DetectionApp is not signed with an official developer certificate, Windows may show a security warning during installation. This is normal and safe as long as you downloaded the installer from our official GitHub releases.</p>
+<h4 id="step-1-download-the-installer">Step 1: Download the Installer<a class="headerlink" href="#step-1-download-the-installer" title="Permanent link">&para;</a></h4>
 <ol>
-<li>Install <a href="https://nodejs.org/">Node.js</a> (version 18 or higher)</li>
-<li>Clone the repository:
-   <div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/cardiff-babylab/tinyexplorer-detectionapp.git
-<span class="nb">cd</span><span class="w"> </span>tinyexplorer-detectionapp
-</code></pre></div></li>
-<li>Install dependencies:
-   <div class="highlight"><pre><span></span><code>npm<span class="w"> </span>install
-</code></pre></div></li>
-<li>Start the application:
-   <div class="highlight"><pre><span></span><code>npm<span class="w"> </span>run<span class="w"> </span>start
-</code></pre></div></li>
+<li>Visit the <a href="https://github.com/cardiff-babylab/tinyexplorer-detectionapp/releases">Releases page</a></li>
+<li>Download the latest <code>tinyexplorer-detectionapp-x.y.z-setup.exe</code> file</li>
 </ol>
+<h4 id="step-2-run-the-installer">Step 2: Run the Installer<a class="headerlink" href="#step-2-run-the-installer" title="Permanent link">&para;</a></h4>
+<ol>
+<li>Double-click the downloaded <code>.exe</code> file to launch the installer</li>
+<li>You may see a <strong>Windows Defender SmartScreen</strong> warning (blue screen) saying "Windows protected your PC"</li>
+</ol>
+<div class="admonition info">
+<p class="admonition-title">Why does this warning appear?</p>
+<p>This warning appears because the app is not signed with an official Microsoft developer certificate. This is safe as long as you downloaded the installer from our official GitHub releases.</p>
+</div>
+<ol>
+<li>Click <strong>"More info"</strong> on the warning screen</li>
+<li>Click <strong>"Run anyway"</strong> to proceed with the installation</li>
+</ol>
+<h4 id="step-3-complete-installation">Step 3: Complete Installation<a class="headerlink" href="#step-3-complete-installation" title="Permanent link">&para;</a></h4>
+<ol>
+<li>The installer will ask where to install the application<ul>
+<li>Default location: <code>C:\Users\&lt;YourUsername&gt;\AppData\Local\Programs\TinyExplorer DetectionApp</code></li>
+<li>You can keep the default or choose a different location</li>
+</ul>
+</li>
+<li>Click <strong>Install</strong> to begin the installation</li>
+</ol>
+<div class="admonition warning">
+<p class="admonition-title">Installation takes time</p>
+<p>The installation process may take several minutes and the progress bar might appear stuck at times. <strong>Please be patient</strong> — the installer is copying all necessary files including the Python environment. Do not close the installer window.</p>
+</div>
+<ol>
+<li>Once complete, click <strong>Finish</strong> to close the installer</li>
+</ol>
+<h4 id="step-4-launch-the-application">Step 4: Launch the Application<a class="headerlink" href="#step-4-launch-the-application" title="Permanent link">&para;</a></h4>
+<ol>
+<li>Find <strong>TinyExplorer DetectionApp</strong> in your Start menu or on your Desktop</li>
+<li>Double-click to launch the application</li>
+<li>The app is now ready to use!</li>
+</ol>
+<div class="admonition success">
+<p class="admonition-title">Installation Complete!</p>
+<p>The app is now installed and ready to use.</p>
+</div>
 </div>
 <div class="tabbed-block">
 <h3 id="ubuntulinux-installation-guide">Ubuntu/Linux Installation Guide<a class="headerlink" href="#ubuntulinux-installation-guide" title="Permanent link">&para;</a></h3>
@@ -1120,7 +1213,7 @@
 <p class="admonition-title">Coming Soon</p>
 <p>Linux AppImage/deb package is currently in development. Please check back later or build from source using the instructions below.</p>
 </div>
-<h4 id="build-from-source-temporary-solution_1">Build from Source (Temporary Solution)<a class="headerlink" href="#build-from-source-temporary-solution_1" title="Permanent link">&para;</a></h4>
+<h4 id="build-from-source-temporary-solution">Build from Source (Temporary Solution)<a class="headerlink" href="#build-from-source-temporary-solution" title="Permanent link">&para;</a></h4>
 <ol>
 <li>Install Node.js and npm:
    <div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>apt<span class="w"> </span>update
