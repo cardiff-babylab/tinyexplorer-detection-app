@@ -13,7 +13,7 @@ Choose your operating system below for specific installation instructions:
     Since TinyExplorer DetectionApp is not signed with an Apple Developer certificate, macOS requires additional steps to ensure the app can run safely on your system.
     
     #### Step 1: Download the Application
-    1. Visit the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-facedetectionapp/releases)
+    1. Visit the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detectionapp/releases)
     2. Download the latest `.dmg` file for macOS
     3. Open the downloaded `.dmg` file
     4. Drag **TinyExplorer DetectionApp** to your **Applications** folder
@@ -64,8 +64,8 @@ Choose your operating system below for specific installation instructions:
     1. Install [Node.js](https://nodejs.org/) (version 18 or higher)
     2. Clone the repository:
        ```bash
-       git clone https://github.com/cardiff-babylab/tinyexplorer-facedetectionapp.git
-       cd tinyexplorer-facedetectionapp
+       git clone https://github.com/cardiff-babylab/tinyexplorer-detectionapp.git
+       cd tinyexplorer-detectionapp
        ```
     3. Install dependencies:
        ```bash
@@ -91,8 +91,8 @@ Choose your operating system below for specific installation instructions:
        ```
     2. Clone the repository:
        ```bash
-       git clone https://github.com/cardiff-babylab/tinyexplorer-facedetectionapp.git
-       cd tinyexplorer-facedetectionapp
+       git clone https://github.com/cardiff-babylab/tinyexplorer-detectionapp.git
+       cd tinyexplorer-detectionapp
        ```
     3. Install dependencies:
        ```bash

@@ -63,7 +63,7 @@ If you have ideas for new features, improvements, or bug fixes, please feel free
 ## Getting Started
 
 ### Install a Prebuilt Release (recommended)
-- Download the latest installer for your OS from the [Releases page](https://github.com/andreifoldes/tinyexplorer-facedetectionapp/releases).
+- Download the latest installer for your OS from the [Releases page](https://github.com/andreifoldes/tinyexplorer-detectionapp/releases).
 - Run the installer and launch the app.
 
 ### Build and Run Locally (fallback)
@@ -75,8 +75,8 @@ If no release exists for your system or the installer doesn't work, you can buil
 - Build a distributable package: `npm run build`
 
 ### See Also (Documentation)
-- Basic Usage: https://cardiff-babylab.github.io/tinyexplorer-facedetectionapp/getting-started
-- Supported File Formats: https://cardiff-babylab.github.io/tinyexplorer-facedetectionapp/main-features/#supported-file-formats
+- Basic Usage: https://cardiff-babylab.github.io/tinyexplorer-detectionapp/getting-started
+- Supported File Formats: https://cardiff-babylab.github.io/tinyexplorer-detectionapp/main-features/#supported-file-formats
 
 ## Contact
 

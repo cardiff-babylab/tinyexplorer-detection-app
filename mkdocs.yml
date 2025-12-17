@@ -1,8 +1,8 @@
 site_name: TinyExplorer DetectionApp
 site_description: Desktop face detection app for developmental research using YOLO and RetinaFace. Batch processing, CSV outputs, and cross‑platform builds.
-site_url: https://cardiff-babylab.github.io/tinyexplorer-facedetectionapp/
-repo_url: https://github.com/cardiff-babylab/tinyexplorer-facedetectionapp
-repo_name: cardiff-babylab/tinyexplorer-facedetectionapp
+site_url: https://cardiff-babylab.github.io/tinyexplorer-detectionapp/
+repo_url: https://github.com/cardiff-babylab/tinyexplorer-detectionapp
+repo_name: cardiff-babylab/tinyexplorer-detectionapp
 
 theme:
   name: material
