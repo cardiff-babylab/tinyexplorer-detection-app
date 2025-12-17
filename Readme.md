@@ -1,9 +1,5 @@
 # TinyExplorer DetectionApp
 
-> ⚠️ **BETA STATUS** ⚠️
-> 
-> This software is currently in beta testing. Features and functionality may change as development continues.  
-> **Coming Soon:** Windows version release planned for the near future. Currently available for MacOS only.
 
 <div align="center">
   <img src="docs/assets/screenshots/app-main-interface.png" alt="TinyExplorer DetectionApp Interface" />
@@ -21,6 +17,15 @@ The TinyExplorer DetectionApp is a user-friendly graphical interface designed sp
 - Integration of cutting-edge face recognition models
 - Batch processing capabilities for efficient analysis of large datasets
 - Customizable confidence thresholds for detection accuracy
+
+## Privacy & Data Security
+
+**All processing is performed entirely on your local machine.** No images, videos, or detection results are ever uploaded to external servers. Your research data stays completely private and under your control.
+
+- No cloud processing or data transmission
+- No internet connection required after initial model download
+- Models are downloaded once and stored locally
+- Ideal for working with sensitive research data involving human subjects
 
 
 ## Face Recognition Models

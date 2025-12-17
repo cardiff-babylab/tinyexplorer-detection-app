@@ -21,6 +21,15 @@ The TinyExplorer DetectionApp is a user-friendly graphical interface designed sp
 - Batch processing capabilities for efficient analysis of large datasets
 - Customizable confidence thresholds for detection accuracy
 
+## Privacy & Data Security
+
+**All processing is performed entirely on your local machine.** No images, videos, or detection results are ever uploaded to external servers. Your research data stays completely private and under your control.
+
+- No cloud processing or data transmission
+- No internet connection required after initial model download
+- Models are downloaded once and stored locally
+- Ideal for working with sensitive research data involving human subjects
+
 ## Basic Usage
 
 ### Install a Prebuilt Release (recommended)
