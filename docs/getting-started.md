@@ -56,25 +56,41 @@ Choose your operating system below for specific installation instructions:
 === "Windows"
 
     ### Windows Installation Guide
-    
-    !!! warning "Coming Soon"
-        Windows installer is currently in development. Please check back later or build from source using the instructions below.
-    
-    #### Build from Source (Temporary Solution)
-    1. Install [Node.js](https://nodejs.org/) (version 18 or higher)
-    2. Clone the repository:
-       ```bash
-       git clone https://github.com/cardiff-babylab/tinyexplorer-detectionapp.git
-       cd tinyexplorer-detectionapp
-       ```
-    3. Install dependencies:
-       ```bash
-       npm install
-       ```
-    4. Start the application:
-       ```bash
-       npm run start
-       ```
+
+    Since TinyExplorer DetectionApp is not signed with an official developer certificate, Windows may show a security warning during installation. This is normal and safe as long as you downloaded the installer from our official GitHub releases.
+
+    #### Step 1: Download the Installer
+    1. Visit the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detectionapp/releases)
+    2. Download the latest `tinyexplorer-detectionapp-x.y.z-setup.exe` file
+
+    #### Step 2: Run the Installer
+    1. Double-click the downloaded `.exe` file to launch the installer
+    2. You may see a **Windows Defender SmartScreen** warning (blue screen) saying "Windows protected your PC"
+
+    !!! info "Why does this warning appear?"
+        This warning appears because the app is not signed with an official Microsoft developer certificate. This is safe as long as you downloaded the installer from our official GitHub releases.
+
+    3. Click **"More info"** on the warning screen
+    4. Click **"Run anyway"** to proceed with the installation
+
+    #### Step 3: Complete Installation
+    1. The installer will ask where to install the application
+        - Default location: `C:\Users\<YourUsername>\AppData\Local\Programs\TinyExplorer DetectionApp`
+        - You can keep the default or choose a different location
+    2. Click **Install** to begin the installation
+
+    !!! warning "Installation takes time"
+        The installation process may take several minutes and the progress bar might appear stuck at times. **Please be patient** — the installer is copying all necessary files including the Python environment. Do not close the installer window.
+
+    3. Once complete, click **Finish** to close the installer
+
+    #### Step 4: Launch the Application
+    1. Find **TinyExplorer DetectionApp** in your Start menu or on your Desktop
+    2. Double-click to launch the application
+    3. The app is now ready to use!
+
+    !!! success "Installation Complete!"
+        The app is now installed and ready to use.
 
 === "Ubuntu/Linux"
 
