@@ -1,6 +1,6 @@
 {
-    "short_name": "FaceDetectionApp",
-    "name": "TinyExplorer FaceDetectionApp",
+    "short_name": "DetectionApp",
+    "name": "TinyExplorer DetectionApp",
     "icons": [
         {
             "src": "favicon.ico",

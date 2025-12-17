@@ -1,4 +1,4 @@
-# TinyExplorer FaceDetectionApp
+# TinyExplorer DetectionApp
 
 > ⚠️ **BETA STATUS** ⚠️
 > 
@@ -6,14 +6,14 @@
 > **Coming Soon:** Windows version release planned for the near future. Currently available for MacOS only.
 
 <div align="center">
-  <img src="docs/assets/screenshots/app-main-interface.png" alt="TinyExplorer FaceDetectionApp Interface" />
+  <img src="docs/assets/screenshots/app-main-interface.png" alt="TinyExplorer DetectionApp Interface" />
   <br>
   <em>Main application interface showing file selection, model options, and confidence threshold controls</em>
 </div>
 
 ## Overview
 
-The TinyExplorer FaceDetectionApp is a user-friendly graphical interface designed specifically for developmental psychologists working with infants and young children. This toolbox integrates state-of-the-art open-source face recognition algorithms into an easy-to-use software package, streamlining the process of analyzing facial data in developmental research.
+The TinyExplorer DetectionApp is a user-friendly graphical interface designed specifically for developmental psychologists working with infants and young children. This toolbox integrates state-of-the-art open-source face recognition algorithms into an easy-to-use software package, streamlining the process of analyzing facial data in developmental research.
 
 ## Features
 

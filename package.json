@@ -73,7 +73,7 @@
     ],
     "build": {
         "appId": "com.example.tinyexplorer-facedetectionapp",
-        "productName": "TinyExplorer FaceDetectionApp",
+        "productName": "TinyExplorer DetectionApp",
         "forceCodeSigning": false,
         "mac": {
             "target": [
@@ -141,7 +141,7 @@
         ],
         "linux": {
             "desktop": {
-                "Name": "TinyExplorer FaceDetectionApp",
+                "Name": "TinyExplorer DetectionApp",
                 "Comment": "Face detection using YOLO models",
                 "Keywords": "face;detection;yolo;ai;ml;",
                 "Categories": "Development;Science;Graphics;"

@@ -10,4 +10,4 @@
 2. Follow prompts if a new version is available.
 3. You can also visit the [GitHub releases page](https://github.com/cardiff-babylab/tinyexplorer-facedetectionapp/releases) to download updates manually.
 
-Thank you for using the TinyExplorer FaceDetectionApp!
+Thank you for using the TinyExplorer DetectionApp!

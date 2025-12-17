@@ -99,7 +99,7 @@ class FaceDetectionProcessor:
             base_dir = os.environ.get("FACE_MODEL_DIR")
             if not base_dir:
                 data_home = os.environ.get("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
-                base_dir = os.path.join(data_home, "TinyExplorerFaceDetection", "models")
+                base_dir = os.path.join(data_home, "TinyExplorerDetection", "models")
             os.makedirs(base_dir, exist_ok=True)
             self._model_dir = base_dir
             if self.progress_callback:

@@ -19,7 +19,7 @@
 
 !macro customInit
   ; Log installation start
-  ${ConsoleLog} "TinyExplorer FaceDetectionApp installation starting..."
+  ${ConsoleLog} "TinyExplorer DetectionApp installation starting..."
   ${ConsoleLog} "Version: ${VERSION}"
   ${ConsoleLog} "Architecture: x64"
   
@@ -41,8 +41,8 @@
   
   ; Log model directory creation
   ${ConsoleLog} "Creating model storage directories..."
-  CreateDirectory "$LOCALAPPDATA\TinyExplorerFaceDetection"
-  CreateDirectory "$LOCALAPPDATA\TinyExplorerFaceDetection\models"
+  CreateDirectory "$LOCALAPPDATA\TinyExplorerDetection"
+  CreateDirectory "$LOCALAPPDATA\TinyExplorerDetection\models"
   
   ${ConsoleLog} "Setting up shortcuts..."
 !macroend
@@ -55,7 +55,7 @@
 !macroend
 
 !macro customUnInit
-  ${ConsoleLog} "TinyExplorer FaceDetectionApp uninstallation starting..."
+  ${ConsoleLog} "TinyExplorer DetectionApp uninstallation starting..."
 !macroend
 
 !macro customUnInstall
@@ -64,11 +64,11 @@
   
   ; Optional: Remove model cache (ask user in GUI mode)
   ${If} ${Silent}
-    ${ConsoleLog} "Preserving model cache at $LOCALAPPDATA\TinyExplorerFaceDetection\models"
+    ${ConsoleLog} "Preserving model cache at $LOCALAPPDATA\TinyExplorerDetection\models"
   ${Else}
     MessageBox MB_YESNO "Do you want to remove downloaded models?$\n$\nThis will delete all cached face detection models." IDYES removeModels IDNO keepModels
     removeModels:
-      RMDir /r "$LOCALAPPDATA\TinyExplorerFaceDetection"
+      RMDir /r "$LOCALAPPDATA\TinyExplorerDetection"
       ${ConsoleLog} "Model cache removed"
       Goto done
     keepModels:
@@ -94,7 +94,7 @@
   ${If} $R1 != ""
     ${ConsoleLog} "Logging to file: $R1"
     LogSet on
-    LogText "Installation log for TinyExplorer FaceDetectionApp"
+    LogText "Installation log for TinyExplorer DetectionApp"
   ${EndIf}
   
   ; Support for custom installation directory in silent mode

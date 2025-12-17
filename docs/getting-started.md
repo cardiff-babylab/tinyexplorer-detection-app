@@ -1,6 +1,6 @@
 # Getting Started
 
-Welcome to the TinyExplorer FaceDetectionApp user guide. This section helps you install the application and become familiar with the interface.
+Welcome to the TinyExplorer DetectionApp user guide. This section helps you install the application and become familiar with the interface.
 
 ## Installation
 
@@ -10,13 +10,13 @@ Choose your operating system below for specific installation instructions:
 
     ### macOS Installation Guide
     
-    Since TinyExplorer FaceDetectionApp is not signed with an Apple Developer certificate, macOS requires additional steps to ensure the app can run safely on your system.
+    Since TinyExplorer DetectionApp is not signed with an Apple Developer certificate, macOS requires additional steps to ensure the app can run safely on your system.
     
     #### Step 1: Download the Application
     1. Visit the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-facedetectionapp/releases)
     2. Download the latest `.dmg` file for macOS
     3. Open the downloaded `.dmg` file
-    4. Drag **TinyExplorer FaceDetectionApp** to your **Applications** folder
+    4. Drag **TinyExplorer DetectionApp** to your **Applications** folder
     
     #### Step 2: Remove Quarantine (Required)
     
@@ -46,7 +46,7 @@ Choose your operating system below for specific installation instructions:
     
     #### Step 3: Launch the Application
     1. Go to your **Applications** folder
-    2. Double-click **TinyExplorer FaceDetectionApp**
+    2. Double-click **TinyExplorer DetectionApp**
     3. If you see a security warning, click **Open** to proceed
     4. The app will now launch successfully!
     
@@ -110,7 +110,7 @@ When you first launch the application, you'll see the main interface with all th
 ## Interface Overview
 
 <div align="center">
-  <img src="../assets/screenshots/app-main-interface.png" alt="TinyExplorer FaceDetectionApp Interface" />
+  <img src="../assets/screenshots/app-main-interface.png" alt="TinyExplorer DetectionApp Interface" />
   <br>
   <em>Main application interface showing file selection, model options, and confidence threshold controls</em>
 </div>
