@@ -81,46 +81,59 @@ const initializePython = async () => {
         const retinafaceVenvPython3 = isWindows ? "" : path.join(resourcesBase, PY_DIST_FOLDER, "retinaface-env", venvBinDir, "python3");
         const subprocessScriptPath = path.join(resourcesBase, PY_DIST_FOLDER, "python", "subprocess_api.py");
 
-        // Prefer the relocatable standalone Python to avoid non-relocatable venv interpreter symlinks
-        const standalonePythonDir = isWindows
-            ? path.join(resourcesBase, PY_DIST_FOLDER, "python-windows")
-            : path.join(resourcesBase, PY_DIST_FOLDER, "python-standalone");
-        const standalonePython = isWindows
-            ? path.join(standalonePythonDir, "python.exe")
-            : path.join(standalonePythonDir, "bin", "python3.10");
-        
-        // Always use the relocatable standalone Python with the multi-env launcher in packaged mode
-        if (fs.existsSync(standalonePython)) {
-            const multiEnvLauncherPath = path.join(resourcesBase, PY_DIST_FOLDER, "python", "multi_env_launcher.py");
-            if (fs.existsSync(multiEnvLauncherPath)) {
-                pythonPath = standalonePython;
-                scriptPath = multiEnvLauncherPath;
-                try { console.log(`Using bundled standalone Python: ${pythonPath}`); } catch (e) {}
-                try { console.log("With multi-environment launcher"); } catch (e) {}
-            } else {
-                try { console.log("Multi-environment launcher not found"); } catch (e) {}
-                dialog.showErrorBox("Error", "Python environment not properly packaged");
-                return;
-            }
-        } else if (fs.existsSync(retinafaceVenvPython) || (retinafaceVenvPython3 && fs.existsSync(retinafaceVenvPython3)) || fs.existsSync(yoloVenvPython) || (yoloVenvPython3 && fs.existsSync(yoloVenvPython3))) {
-            // Fallback: use venv interpreters directly only if standalone missing
+        // On Windows, yolo-env and retinaface-env are standalone Python copies with packages installed directly
+        // (no venv structure) - use them directly with subprocess_api.py
+        // On Unix, we use a standalone Python with multi_env_launcher.py to switch between venv environments
+        if (isWindows) {
+            // Windows: Use the standalone Python in env directories directly (packages are installed there)
             const pickExisting = (...candidates: string[]): string | "" => {
                 for (const c of candidates) { if (c && fs.existsSync(c)) return c; }
                 return "";
             };
             const chosen = currentModelType === 'retinaface'
-                ? pickExisting(retinafaceVenvPython, retinafaceVenvPython3)
-                : pickExisting(yoloVenvPython, yoloVenvPython3);
+                ? pickExisting(retinafaceVenvPython)
+                : pickExisting(yoloVenvPython);
+
             if (chosen) {
                 pythonPath = chosen;
                 scriptPath = subprocessScriptPath;
-                try { console.log(`Using ${currentModelType} venv Python directly: ${pythonPath}`); } catch (e) {}
+                try { console.log(`Using ${currentModelType} standalone Python: ${pythonPath}`); } catch (e) {}
+            } else {
+                try { console.error("No bundled Python environment found for Windows!"); } catch (e) {}
+                dialog.showErrorBox("Python Not Found", "The application was not packaged correctly. Python environment is missing.");
+                return;
             }
         } else {
-            // Last resort fallback - should not happen with proper bundling
-            try { console.error("No bundled Python found! This should not happen in packaged mode."); } catch (e) {}
-            dialog.showErrorBox("Python Not Found", "The application was not packaged correctly. Python interpreter is missing.");
-            return;
+            // Unix (macOS/Linux): Use standalone Python with multi_env_launcher to switch between venv environments
+            const standalonePythonDir = path.join(resourcesBase, PY_DIST_FOLDER, "python-standalone");
+            const standalonePython = path.join(standalonePythonDir, "bin", "python3.10");
+            const multiEnvLauncherPath = path.join(resourcesBase, PY_DIST_FOLDER, "python", "multi_env_launcher.py");
+
+            if (fs.existsSync(standalonePython) && fs.existsSync(multiEnvLauncherPath)) {
+                pythonPath = standalonePython;
+                scriptPath = multiEnvLauncherPath;
+                try { console.log(`Using bundled standalone Python: ${pythonPath}`); } catch (e) {}
+                try { console.log("With multi-environment launcher"); } catch (e) {}
+            } else if (fs.existsSync(retinafaceVenvPython) || (retinafaceVenvPython3 && fs.existsSync(retinafaceVenvPython3)) || fs.existsSync(yoloVenvPython) || (yoloVenvPython3 && fs.existsSync(yoloVenvPython3))) {
+                // Fallback: use venv interpreters directly only if standalone missing
+                const pickExisting = (...candidates: string[]): string | "" => {
+                    for (const c of candidates) { if (c && fs.existsSync(c)) return c; }
+                    return "";
+                };
+                const chosen = currentModelType === 'retinaface'
+                    ? pickExisting(retinafaceVenvPython, retinafaceVenvPython3)
+                    : pickExisting(yoloVenvPython, yoloVenvPython3);
+                if (chosen) {
+                    pythonPath = chosen;
+                    scriptPath = subprocessScriptPath;
+                    try { console.log(`Using ${currentModelType} venv Python directly: ${pythonPath}`); } catch (e) {}
+                }
+            } else {
+                // Last resort fallback - should not happen with proper bundling
+                try { console.error("No bundled Python found! This should not happen in packaged mode."); } catch (e) {}
+                dialog.showErrorBox("Python Not Found", "The application was not packaged correctly. Python interpreter is missing.");
+                return;
+            }
         }
     } else {
         // Development mode - support dual environment switching
