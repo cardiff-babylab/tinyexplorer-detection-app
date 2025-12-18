@@ -1,6 +1,6 @@
 # Getting Started
 
-Welcome to the TinyExplorer DetectionApp user guide. This section helps you install the application and become familiar with the interface.
+Welcome to the TinyExplorer Detection App user guide. This section helps you install the application and become familiar with the interface.
 
 ## Installation
 
@@ -10,13 +10,13 @@ Choose your operating system below for specific installation instructions:
 
     ### macOS Installation Guide
     
-    Since TinyExplorer DetectionApp is not signed with an Apple Developer certificate, macOS requires additional steps to ensure the app can run safely on your system.
+    Since TinyExplorer Detection App is not signed with an Apple Developer certificate, macOS requires additional steps to ensure the app can run safely on your system.
     
     #### Step 1: Download the Application
-    1. Visit the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detectionapp/releases)
+    1. Visit the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases)
     2. Download the latest `.dmg` file for macOS
     3. Open the downloaded `.dmg` file
-    4. Drag **TinyExplorer DetectionApp** to your **Applications** folder
+    4. Drag **TinyExplorer Detection App** to your **Applications** folder
     
     #### Step 2: Remove Quarantine (Required)
     
@@ -33,7 +33,7 @@ Choose your operating system below for specific installation instructions:
        - This will automatically add the correct path to your app
        - The complete command should look like:
          ```bash
-         sudo xattr -r -d com.apple.quarantine /Applications/TinyExplorer\ FaceDetectionApp.app
+         sudo xattr -r -d com.apple.quarantine /Applications/TinyExplorer\ Detection\ App.app
          ```
     5. Press **Enter** and type your Mac password when prompted
     
@@ -46,7 +46,7 @@ Choose your operating system below for specific installation instructions:
     
     #### Step 3: Launch the Application
     1. Go to your **Applications** folder
-    2. Double-click **TinyExplorer DetectionApp**
+    2. Double-click **TinyExplorer Detection App**
     3. If you see a security warning, click **Open** to proceed
     4. The app will now launch successfully!
     
@@ -57,11 +57,11 @@ Choose your operating system below for specific installation instructions:
 
     ### Windows Installation Guide
 
-    Since TinyExplorer DetectionApp is not signed with an official developer certificate, Windows may show a security warning during installation. This is normal and safe as long as you downloaded the installer from our official GitHub releases.
+    Since TinyExplorer Detection App is not signed with an official developer certificate, Windows may show a security warning during installation. This is normal and safe as long as you downloaded the installer from our official GitHub releases.
 
     #### Step 1: Download the Installer
-    1. Visit the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detectionapp/releases)
-    2. Download the latest `tinyexplorer-detectionapp-x.y.z-setup.exe` file
+    1. Visit the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases)
+    2. Download the latest `tinyexplorer-detection-app-x.y.z-setup.exe` file
 
     #### Step 2: Run the Installer
     1. Double-click the downloaded `.exe` file to launch the installer
@@ -75,7 +75,7 @@ Choose your operating system below for specific installation instructions:
 
     #### Step 3: Complete Installation
     1. The installer will ask where to install the application
-        - Default location: `C:\Users\<YourUsername>\AppData\Local\Programs\TinyExplorer DetectionApp`
+        - Default location: `C:\Users\<YourUsername>\AppData\Local\Programs\TinyExplorer Detection App`
         - You can keep the default or choose a different location
     2. Click **Install** to begin the installation
 
@@ -85,7 +85,7 @@ Choose your operating system below for specific installation instructions:
     3. Once complete, click **Finish** to close the installer
 
     #### Step 4: Launch the Application
-    1. Find **TinyExplorer DetectionApp** in your Start menu or on your Desktop
+    1. Find **TinyExplorer Detection App** in your Start menu or on your Desktop
     2. Double-click to launch the application
     3. The app is now ready to use!
 
@@ -107,8 +107,8 @@ Choose your operating system below for specific installation instructions:
        ```
     2. Clone the repository:
        ```bash
-       git clone https://github.com/cardiff-babylab/tinyexplorer-detectionapp.git
-       cd tinyexplorer-detectionapp
+       git clone https://github.com/cardiff-babylab/tinyexplorer-detection-app.git
+       cd tinyexplorer-detection-app
        ```
     3. Install dependencies:
        ```bash
@@ -126,7 +126,7 @@ When you first launch the application, you'll see the main interface with all th
 ## Interface Overview
 
 <div align="center">
-  <img src="../assets/screenshots/app-main-interface.png" alt="TinyExplorer DetectionApp Interface" />
+  <img src="../assets/screenshots/app-main-interface.png" alt="TinyExplorer Detection App Interface" />
   <br>
   <em>Main application interface showing file selection, model options, and confidence threshold controls</em>
 </div>

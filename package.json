@@ -1,5 +1,5 @@
 {
-    "name": "tinyexplorer-detectionapp",
+    "name": "tinyexplorer-detection-app",
     "version": "0.1.0",
     "private": true,
     "homepage": "./",
@@ -72,8 +72,8 @@
         "not op_mini all"
     ],
     "build": {
-        "appId": "com.example.tinyexplorer-detectionapp",
-        "productName": "TinyExplorer DetectionApp",
+        "appId": "com.example.tinyexplorer-detection-app",
+        "productName": "TinyExplorer Detection App",
         "forceCodeSigning": false,
         "mac": {
             "target": [
@@ -137,7 +137,7 @@
         ],
         "linux": {
             "desktop": {
-                "Name": "TinyExplorer DetectionApp",
+                "Name": "TinyExplorer Detection App",
                 "Comment": "Face detection using YOLO and RetinaFace models",
                 "Keywords": "face;detection;yolo;ai;ml;",
                 "Categories": "Development;Science;Graphics;"
@@ -217,7 +217,7 @@
             "include": "resources/installer.nsh"
         },
         "appImage": {
-            "desktop": "build/appimage/tinyexplorer-detectionapp.desktop",
+            "desktop": "build/appimage/tinyexplorer-detection-app.desktop",
             "category": "Development",
             "synopsis": "Face detection using YOLO and RetinaFace models"
         },

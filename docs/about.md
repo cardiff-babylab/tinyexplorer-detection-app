@@ -1,8 +1,8 @@
-# About TinyExplorer DetectionApp
+# About TinyExplorer Detection App
 
 ## About the Project
 
-TinyExplorer DetectionApp is a desktop application designed for developmental research, providing robust face detection capabilities using state-of-the-art YOLO and RetinaFace models. The app enables researchers to efficiently process large volumes of images and videos, extracting face detection data for analysis.
+TinyExplorer Detection App is a desktop application designed for developmental research, providing robust face detection capabilities using state-of-the-art YOLO and RetinaFace models. The app enables researchers to efficiently process large volumes of images and videos, extracting face detection data for analysis.
 
 ## Copyright & Attribution
 
@@ -44,7 +44,7 @@ The application combines modern web technologies with machine learning framework
 
 ## License
 
-This project is released under the MIT License. See the [LICENSE](https://github.com/cardiff-babylab/tinyexplorer-detectionapp/blob/master/LICENSE.txt) file for details.
+This project is released under the MIT License. See the [LICENSE](https://github.com/cardiff-babylab/tinyexplorer-detection-app/blob/master/LICENSE.txt) file for details.
 
 ## Acknowledgments
 
@@ -62,4 +62,4 @@ This work was supported by a [James S. McDonnell Foundation (JSMF) Opportunity A
 
 ---
 
-*TinyExplorer DetectionApp - Advancing developmental research through innovative technology*
+*TinyExplorer Detection App - Advancing developmental research through innovative technology*

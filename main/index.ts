@@ -17,7 +17,7 @@ app.disableHardwareAcceleration();
 // Mitigate Windows cache permission issues when running from protected folders (e.g., OneDrive)
 if (process.platform === 'win32') {
     const os = require('os');
-    const userData = path.join(os.homedir(), 'AppData', 'Roaming', 'TinyExplorer DetectionApp');
+    const userData = path.join(os.homedir(), 'AppData', 'Roaming', 'TinyExplorer Detection App');
     app.setPath('userData', userData);
     app.setPath('cache', path.join(userData, 'Cache'));
 }
@@ -117,7 +117,7 @@ function createTray() {
     tray = new Tray(resizedIcon);
     
     // Set the tooltip
-    tray.setToolTip('TinyExplorer DetectionApp');
+    tray.setToolTip('TinyExplorer Detection App');
     
     // Create context menu
     const contextMenu = Menu.buildFromTemplate([

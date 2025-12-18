@@ -446,7 +446,7 @@ const App = () => {
             <div className="app-container">
                 <div className="left-panel">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-                        <h2 style={{ margin: 0 }}>TinyExplorer DetectionApp</h2>
+                        <h2 style={{ margin: 0 }}>TinyExplorer Detection App</h2>
                         <img src="dragon.png" alt="App Logo" style={{ width: '32px', height: '32px' }} />
                     </div>
                     

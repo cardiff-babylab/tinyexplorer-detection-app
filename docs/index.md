@@ -1,19 +1,19 @@
 ---
-title: TinyExplorer DetectionApp
+title: TinyExplorer Detection App
 description: Desktop face detection app for developmental research using YOLO and RetinaFace. Batch processing with CSV exports and visual outputs.
 image: assets/images/dragon.png
 ---
 
-# TinyExplorer DetectionApp
+# TinyExplorer Detection App
 
 <div align="center">
-  <img src="assets/screenshots/app-main-interface.png" alt="TinyExplorer DetectionApp Interface" />
+  <img src="assets/screenshots/app-main-interface.png" alt="TinyExplorer Detection App Interface" />
   <br>
   <em>Main application interface showing file selection, model options, and confidence threshold controls</em>
 </div>
 
 ## Overview
-The TinyExplorer DetectionApp is a user-friendly graphical interface designed specifically for developmental psychologists working with infants and young children. This toolbox integrates state-of-the-art open-source face recognition algorithms into an easy-to-use software package, streamlining the process of analyzing facial data in developmental research.
+The TinyExplorer Detection App is a user-friendly graphical interface designed specifically for developmental psychologists working with infants and young children. This toolbox integrates state-of-the-art open-source face recognition algorithms into an easy-to-use software package, streamlining the process of analyzing facial data in developmental research.
 
 ## Features
 - Simple graphical user interface for easy operation
@@ -33,7 +33,7 @@ The TinyExplorer DetectionApp is a user-friendly graphical interface designed sp
 ## Basic Usage
 
 ### Install a Prebuilt Release (recommended)
-- Download the latest installer for your OS from the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detectionapp/releases).
+- Download the latest installer for your OS from the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases).
 - Run the installer and launch the app.
 
 ### Build Locally with npm (fallback)

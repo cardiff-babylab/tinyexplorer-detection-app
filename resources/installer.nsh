@@ -19,7 +19,7 @@
 
 !macro customInit
   ; Log installation start
-  ${ConsoleLog} "TinyExplorer DetectionApp installation starting..."
+  ${ConsoleLog} "TinyExplorer Detection App installation starting..."
   ${ConsoleLog} "Version: ${VERSION}"
   ${ConsoleLog} "Architecture: x64"
   
@@ -55,7 +55,7 @@
 !macroend
 
 !macro customUnInit
-  ${ConsoleLog} "TinyExplorer DetectionApp uninstallation starting..."
+  ${ConsoleLog} "TinyExplorer Detection App uninstallation starting..."
 !macroend
 
 !macro customUnInstall
@@ -94,7 +94,7 @@
   ${If} $R1 != ""
     ${ConsoleLog} "Logging to file: $R1"
     LogSet on
-    LogText "Installation log for TinyExplorer DetectionApp"
+    LogText "Installation log for TinyExplorer Detection App"
   ${EndIf}
   
   ; Support for custom installation directory in silent mode

@@ -1,15 +1,15 @@
-# TinyExplorer DetectionApp
+# TinyExplorer Detection App
 
 
 <div align="center">
-  <img src="docs/assets/screenshots/app-main-interface.png" alt="TinyExplorer DetectionApp Interface" />
+  <img src="docs/assets/screenshots/app-main-interface.png" alt="TinyExplorer Detection App Interface" />
   <br>
   <em>Main application interface showing file selection, model options, and confidence threshold controls</em>
 </div>
 
 ## Overview
 
-The TinyExplorer DetectionApp is a user-friendly graphical interface designed specifically for developmental psychologists working with infants and young children. This toolbox integrates state-of-the-art open-source face recognition algorithms into an easy-to-use software package, streamlining the process of analyzing facial data in developmental research.
+The TinyExplorer Detection App is a user-friendly graphical interface designed specifically for developmental psychologists working with infants and young children. This toolbox integrates state-of-the-art open-source face recognition algorithms into an easy-to-use software package, streamlining the process of analyzing facial data in developmental research.
 
 ## Features
 
@@ -68,7 +68,7 @@ If you have ideas for new features, improvements, or bug fixes, please feel free
 ## Getting Started
 
 ### Install a Prebuilt Release (recommended)
-- Download the latest installer for your OS from the [Releases page](https://github.com/andreifoldes/tinyexplorer-detectionapp/releases).
+- Download the latest installer for your OS from the [Releases page](https://github.com/andreifoldes/tinyexplorer-detection-app/releases).
 - Run the installer and launch the app.
 
 ### Build and Run Locally (fallback)
@@ -80,8 +80,8 @@ If no release exists for your system or the installer doesn't work, you can buil
 - Build a distributable package: `npm run build`
 
 ### See Also (Documentation)
-- Basic Usage: https://cardiff-babylab.github.io/tinyexplorer-detectionapp/getting-started
-- Supported File Formats: https://cardiff-babylab.github.io/tinyexplorer-detectionapp/main-features/#supported-file-formats
+- Basic Usage: https://cardiff-babylab.github.io/tinyexplorer-detection-app/getting-started
+- Supported File Formats: https://cardiff-babylab.github.io/tinyexplorer-detection-app/main-features/#supported-file-formats
 
 ## Contact
 
