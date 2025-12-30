@@ -80,11 +80,12 @@ async function downloadWindowsPython() {
     let pythonUrl;
 
     // Use python-build-standalone for portable Python with full stdlib
-    // Updated to latest release (20241217) for better Windows compatibility
+    // Using 20240726 release for better PyTorch DLL compatibility
+    // (20241217 release has MSVC runtime changes that cause PyTorch c10.dll WinError 1114)
     if (arch === 'x64') {
-        pythonUrl = 'https://github.com/astral-sh/python-build-standalone/releases/download/20241217/cpython-3.10.16%2B20241217-x86_64-pc-windows-msvc-install_only.tar.gz';
+        pythonUrl = 'https://github.com/astral-sh/python-build-standalone/releases/download/20240726/cpython-3.10.14%2B20240726-x86_64-pc-windows-msvc-install_only.tar.gz';
     } else {
-        pythonUrl = 'https://github.com/astral-sh/python-build-standalone/releases/download/20241217/cpython-3.10.16%2B20241217-i686-pc-windows-msvc-install_only.tar.gz';
+        pythonUrl = 'https://github.com/astral-sh/python-build-standalone/releases/download/20240726/cpython-3.10.14%2B20240726-i686-pc-windows-msvc-install_only.tar.gz';
     }
     
     const pythonDir = path.join(pythonDistDir, 'python-windows');
