@@ -365,15 +365,24 @@ const initializePython = async () => {
             // Don't show dialog for signal-based terminations (negative codes on Unix)
             if (code > 0) {
                 try { console.error(`Python process exited unexpectedly with code ${code}`); } catch (e) {}
-                
+
                 // Provide more specific error messages based on exit code
                 let errorMessage = `The Python backend stopped unexpectedly (code ${code}).`;
                 let errorDetails = "The application may not function correctly.";
-                
+
                 if (code === 1) {
                     errorMessage = "Python Environment Error";
                     errorDetails = `The Python backend failed to start, likely due to missing dependencies for the ${currentModelType} environment. ` +
                                  "Check the console output for specific missing packages. You may need to rebuild the Python bundle.";
+
+                    // Check for Windows-specific PyTorch DLL error (WinError 1114)
+                    if (process.platform === "win32") {
+                        errorMessage = "Missing Visual C++ Redistributable";
+                        errorDetails = "PyTorch requires the Microsoft Visual C++ Redistributable 2015-2022.\n\n" +
+                                     "Please download and install it from:\n" +
+                                     "https://aka.ms/vs/17/release/vc_redist.x64.exe\n\n" +
+                                     "After installing, restart the application.";
+                    }
                 } else if (code === 2) {
                     errorMessage = "Python Import Error";
                     errorDetails = "Failed to import required Python modules. Check that all dependencies are properly installed.";
@@ -384,7 +393,7 @@ const initializePython = async () => {
                     errorMessage = "Python Not Found";
                     errorDetails = "Python executable not found. The application bundle may be corrupted.";
                 }
-                
+
                 // Only show dialog if app is still running
                 if (!(app as any).isQuitting && Electron.BrowserWindow.getAllWindows().length > 0) {
                     dialog.showErrorBox(errorMessage, errorDetails);

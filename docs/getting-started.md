@@ -63,7 +63,16 @@ Choose your operating system below for specific installation instructions:
     1. Visit the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases)
     2. Download the latest `tinyexplorer-detection-app-x.y.z-setup.exe` file
 
-    #### Step 2: Run the Installer
+    #### Step 2: Install Prerequisites
+
+    !!! warning "Required: Microsoft Visual C++ Redistributable"
+        TinyExplorer Detection App requires **Microsoft Visual C++ Redistributable 2015-2022** for PyTorch to function properly.
+
+        The installer will check for this and offer to download it if missing. Alternatively, you can install it manually from:
+
+        **Download**: [https://aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+
+    #### Step 3: Run the Installer
     1. Double-click the downloaded `.exe` file to launch the installer
     2. You may see a **Windows Defender SmartScreen** warning (blue screen) saying "Windows protected your PC"
 
@@ -72,8 +81,9 @@ Choose your operating system below for specific installation instructions:
 
     3. Click **"More info"** on the warning screen
     4. Click **"Run anyway"** to proceed with the installation
+    5. If prompted about Visual C++ Redistributable, click **"Yes"** to install it
 
-    #### Step 3: Complete Installation
+    #### Step 4: Complete Installation
     1. The installer will ask where to install the application
         - Default location: `C:\Users\<YourUsername>\AppData\Local\Programs\TinyExplorer Detection App`
         - You can keep the default or choose a different location
@@ -84,7 +94,7 @@ Choose your operating system below for specific installation instructions:
 
     3. Once complete, click **Finish** to close the installer
 
-    #### Step 4: Launch the Application
+    #### Step 5: Launch the Application
     1. Find **TinyExplorer Detection App** in your Start menu or on your Desktop
     2. Double-click to launch the application
     3. The app is now ready to use!

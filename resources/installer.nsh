@@ -22,13 +22,41 @@
   ${ConsoleLog} "TinyExplorer Detection App installation starting..."
   ${ConsoleLog} "Version: ${VERSION}"
   ${ConsoleLog} "Architecture: x64"
-  
+
   ; Check for silent mode
   ${If} ${Silent}
     ${ConsoleLog} "Running in silent mode with console output"
   ${Else}
     ${ConsoleLog} "Running in GUI mode"
   ${EndIf}
+
+  ; Check for Visual C++ Redistributable (required for PyTorch)
+  ${ConsoleLog} "Checking for Microsoft Visual C++ Redistributable..."
+
+  ; Check for vcruntime140.dll in System32
+  IfFileExists "$SYSDIR\vcruntime140.dll" vcredist_found vcredist_missing
+
+  vcredist_missing:
+    ${ConsoleLog} "Visual C++ Redistributable NOT found"
+    ${If} ${Silent}
+      ${ConsoleLog} "ERROR: Microsoft Visual C++ Redistributable 2015-2022 is required"
+      ${ConsoleLog} "Please install from: https://aka.ms/vs/17/release/vc_redist.x64.exe"
+      Abort "Microsoft Visual C++ Redistributable 2015-2022 is required. Install from: https://aka.ms/vs/17/release/vc_redist.x64.exe"
+    ${Else}
+      MessageBox MB_YESNO|MB_ICONEXCLAMATION "Microsoft Visual C++ Redistributable 2015-2022 is required for PyTorch.$\n$\nThis component is not installed on your system.$\n$\nWould you like to download and install it now?$\n$\n(The installer will open https://aka.ms/vs/17/release/vc_redist.x64.exe)" IDYES download_vcredist IDNO skip_vcredist
+      download_vcredist:
+        ExecShell "open" "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+        MessageBox MB_OK|MB_ICONINFORMATION "Please install the Visual C++ Redistributable, then run this installer again.$\n$\nThe installation will now exit."
+        Abort "User needs to install Visual C++ Redistributable first"
+      skip_vcredist:
+        MessageBox MB_OK|MB_ICONWARNING "Installation will continue, but the application may not work without Visual C++ Redistributable.$\n$\nYou can install it later from: https://aka.ms/vs/17/release/vc_redist.x64.exe"
+    ${EndIf}
+    Goto vcredist_done
+
+  vcredist_found:
+    ${ConsoleLog} "Visual C++ Redistributable found - OK"
+
+  vcredist_done:
 !macroend
 
 !macro customInstall
