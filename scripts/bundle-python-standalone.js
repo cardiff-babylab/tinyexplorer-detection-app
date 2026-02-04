@@ -13,6 +13,49 @@ const pythonDistDir = path.join(__dirname, '..', 'pythondist');
 console.log('Downloading standalone Python 3.10 for macOS...');
 
 /**
+ * Fix Python symlinks in a venv to be relative to python-standalone
+ * This ensures the venv remains relocatable when packaged
+ */
+function fixVenvPythonSymlinks(venvDir, pythonStandaloneDir) {
+    if (platform === 'win32') {
+        // Windows doesn't use symlinks for Python in venvs
+        return;
+    }
+    
+    const binDir = path.join(venvDir, 'bin');
+    const pythonLinks = ['python', 'python3', 'python3.10'];
+    
+    // Calculate relative path from venv/bin to python-standalone/bin
+    const relPath = path.relative(binDir, path.join(pythonStandaloneDir, 'bin', 'python3.10'));
+    
+    console.log(`Fixing venv symlinks in ${binDir} -> ${relPath}`);
+    
+    for (const link of pythonLinks) {
+        const linkPath = path.join(binDir, link);
+        try {
+            const stat = fs.lstatSync(linkPath);
+            if (stat.isSymbolicLink()) {
+                const target = fs.readlinkSync(linkPath);
+                // Check if it's an absolute path or points outside the bundle
+                if (path.isAbsolute(target) || target.includes('..')) {
+                    fs.unlinkSync(linkPath);
+                    if (link === 'python3.10') {
+                        // Point directly to the standalone Python
+                        fs.symlinkSync(relPath, linkPath);
+                    } else {
+                        // python and python3 should point to python3.10
+                        fs.symlinkSync('python3.10', linkPath);
+                    }
+                    console.log(`  Fixed ${link} -> ${link === 'python3.10' ? relPath : 'python3.10'}`);
+                }
+            }
+        } catch (err) {
+            // Link doesn't exist or other error, skip
+        }
+    }
+}
+
+/**
  * Downloads a file from a URL
  */
 function downloadFile(url, destPath) {
@@ -165,6 +208,8 @@ async function createVirtualEnvironments(pythonStandaloneDir) {
     console.log('Creating YOLO virtual environment...');
     execSync(`"${pythonExe}" -m venv "${yoloEnvDir}"`, { stdio: 'inherit' });
     
+    // Fix symlinks to be relative for relocatability
+    fixVenvPythonSymlinks(yoloEnvDir, pythonStandaloneDir);
     // Install YOLO packages
     const yoloPython = platform === 'win32'
         ? path.join(yoloEnvDir, 'Scripts', 'python.exe')
@@ -184,6 +229,9 @@ async function createVirtualEnvironments(pythonStandaloneDir) {
     // Create RetinaFace virtual environment
     console.log('Creating RetinaFace virtual environment...');
     execSync(`"${pythonExe}" -m venv "${retinafaceEnvDir}"`, { stdio: 'inherit' });
+    
+    // Fix symlinks to be relative for relocatability
+    fixVenvPythonSymlinks(retinafaceEnvDir, pythonStandaloneDir);
     
     // Install RetinaFace packages
     const retinafacePython = platform === 'win32'

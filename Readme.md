@@ -43,7 +43,7 @@ Choose from multiple face detection models included in the app:
 The app automatically downloads required model weights when needed.
 
 ### Model Sources
-- YOLO face weights: https://github.com/akanametov/yolo-face
+- YOLO face weights: https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models (originally from https://github.com/akanametov/yolo-face)
 - RetinaFace implementation: https://github.com/serengil/retinaface
   
 ## Value for Developmental Psychologists

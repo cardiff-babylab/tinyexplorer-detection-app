@@ -145,6 +145,9 @@ squashfs-root/
 *.snap
 *.asar
 
+# Downloaded model weights (stored in GitHub releases, not in repo)
+model-weights/
+
 # macOS application bundles
 *.app/
 

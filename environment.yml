@@ -8,7 +8,8 @@ dependencies:
   - pip:
       - retina-face>=0.0.14
       - tf-keras
-      - git+https://github.com/akanametov/yolo-face.git
+      # YOLO face models downloaded from: https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models
+      # (originally from https://github.com/akanametov/yolo-face)
       - opencv-python
       - pillow
       - numpy

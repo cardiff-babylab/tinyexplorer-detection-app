@@ -112,13 +112,15 @@ class FaceDetectionProcessor:
         
     def _download_face_model(self, model_name: str) -> bool:
         """Download face detection model from GitHub releases"""
+        # Model weights hosted on cardiff-babylab repository releases
+        # Original source: https://github.com/akanametov/yolo-face
         face_models_urls = {
-            "yolov8n-face.pt": "https://github.com/akanametov/yolo-face/releases/download/v0.0.0/yolov8n-face.pt",
-            "yolov8m-face.pt": "https://github.com/akanametov/yolo-face/releases/download/v0.0.0/yolov8m-face.pt",
-            "yolov8l-face.pt": "https://github.com/akanametov/yolo-face/releases/download/v0.0.0/yolov8l-face.pt",
-            "yolov11m-face.pt": "https://github.com/akanametov/yolo-face/releases/download/v0.0.0/yolov11m-face.pt",
-            "yolov11l-face.pt": "https://github.com/akanametov/yolo-face/releases/download/v0.0.0/yolov11l-face.pt",
-            "yolov12l-face.pt": "https://github.com/akanametov/yolo-face/releases/download/v0.0.0/yolov12l-face.pt"
+            "yolov8n-face.pt": "https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/download/v1.0.0-models/yolov8n-face.pt",
+            "yolov8m-face.pt": "https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/download/v1.0.0-models/yolov8m-face.pt",
+            "yolov8l-face.pt": "https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/download/v1.0.0-models/yolov8l-face.pt",
+            "yolov11m-face.pt": "https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/download/v1.0.0-models/yolov11m-face.pt",
+            "yolov11l-face.pt": "https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/download/v1.0.0-models/yolov11l-face.pt",
+            "yolov12l-face.pt": "https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/download/v1.0.0-models/yolov12l-face.pt"
         }
         
         if model_name not in face_models_urls:
