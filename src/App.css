@@ -74,6 +74,42 @@
   line-height: 1;
 }
 
+.mode-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  background: #f4f4f4;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.mode-btn:hover:not(:disabled):not(.active) {
+  background: #e8e8e8;
+  border-color: #999;
+}
+
+.mode-btn.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.mode-btn:disabled {
+  color: #aaa;
+  background: #fafafa;
+  border-color: #e5e5e5;
+  cursor: not-allowed;
+}
+
 .file-input-group {
   width: 100%;
 }

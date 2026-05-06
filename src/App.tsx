@@ -17,6 +17,10 @@ const App = () => {
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     type DetectorInfo = { name: string; variants: string[]; kind: string };
     const [detectorRegistry, setDetectorRegistry] = useState<Record<string, DetectorInfo>>({});
+    // Modalities surfaced in the UI. Hand and speech show as disabled placeholders
+    // until a collaborator drops a matching detector into python/detectors/.
+    const KNOWN_MODES: ReadonlyArray<string> = ["face", "hand", "speech"];
+    const [selectedMode, setSelectedMode] = useState<string>("face");
     const [results, setResults] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
     const [resultsFolder, setResultsFolder] = useState("");
     const [completedResultsFolder, setCompletedResultsFolder] = useState("");
@@ -239,6 +243,18 @@ const App = () => {
         };
     }, [availableModels.length, loadAvailableModels, loadDetectorRegistry, handleCompletionEvent, checkPythonStatus]);
 
+    // Once the registry loads, snap selectedMode to whatever modality the
+    // currently-selected model belongs to (e.g. "RetinaFace" → "face").
+    useEffect(() => {
+        if (Object.keys(detectorRegistry).length === 0) return;
+        for (const info of Object.values(detectorRegistry)) {
+            if (info.variants.includes(selectedModel) && info.name !== selectedMode) {
+                setSelectedMode(info.name);
+                break;
+            }
+        }
+    }, [detectorRegistry, selectedModel, selectedMode]);
+
     const handleSelectResultsFolder = () => {
         console.log("Prompting user to select results folder");
         if (ipcRenderer) {
@@ -363,6 +379,19 @@ const App = () => {
             if (info.variants.includes(variant)) return key;
         }
         return null;
+    };
+
+    // When a mode is picked, switch the model dropdown to the first variant
+    // belonging to that mode (and recompute confidence default for it).
+    const handleModeChange = (newMode: string) => {
+        setSelectedMode(newMode);
+        const firstVariantForMode = Object.values(detectorRegistry)
+            .filter(info => info.name === newMode)
+            .flatMap(info => info.variants)
+            .find(v => availableModels.includes(v));
+        if (firstVariantForMode && firstVariantForMode !== selectedModel) {
+            handleModelChange(firstVariantForMode);
+        }
     };
 
     const handleModelChange = (newModel: string) => {
@@ -520,6 +549,32 @@ const App = () => {
                     </div>
 
                     <div className="control-section">
+                        <label>Select Mode:</label>
+                        <div className="mode-selector">
+                            {KNOWN_MODES.map(mode => {
+                                const hasDetector = Object.values(detectorRegistry)
+                                    .some(info => info.name === mode);
+                                const modeLabel = mode.charAt(0).toUpperCase() + mode.slice(1);
+                                return (
+                                    <button
+                                        key={mode}
+                                        type="button"
+                                        className={`mode-btn ${selectedMode === mode ? "active" : ""}`}
+                                        disabled={!hasDetector}
+                                        title={hasDetector ? `${modeLabel} detection` : `${modeLabel} detection — coming soon`}
+                                        onClick={() => handleModeChange(mode)}
+                                    >
+                                        <span role="img" aria-label={`${mode} modality`}>
+                                            {getDetectorIcon(mode)}
+                                        </span>{" "}
+                                        {modeLabel}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="control-section">
                         <label>Select Model:</label>
                         <select
                             value={selectedModel}
@@ -527,23 +582,24 @@ const App = () => {
                             className="model-select"
                         >
                             {Object.keys(detectorRegistry).length > 0 ? (
-                                Object.entries(detectorRegistry).map(([key, info]) => {
-                                    const variants = info.variants.filter(v => availableModels.includes(v));
-                                    if (variants.length === 0) return null;
-                                    const modalityLabel = info.name.charAt(0).toUpperCase() + info.name.slice(1);
-                                    return (
-                                        <optgroup
-                                            key={key}
-                                            label={`${getDetectorIcon(info.name)} ${modalityLabel} — ${formatBackendName(key)}`}
-                                        >
-                                            {variants.map(model => (
-                                                <option key={model} value={model}>
-                                                    {getDisplayName(model)}
-                                                </option>
-                                            ))}
-                                        </optgroup>
-                                    );
-                                })
+                                Object.entries(detectorRegistry)
+                                    .filter(([, info]) => info.name === selectedMode)
+                                    .map(([key, info]) => {
+                                        const variants = info.variants.filter(v => availableModels.includes(v));
+                                        if (variants.length === 0) return null;
+                                        return (
+                                            <optgroup
+                                                key={key}
+                                                label={formatBackendName(key)}
+                                            >
+                                                {variants.map(model => (
+                                                    <option key={model} value={model}>
+                                                        {getDisplayName(model)}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        );
+                                    })
                             ) : (
                                 availableModels.map(model => (
                                     <option key={model} value={model}>
