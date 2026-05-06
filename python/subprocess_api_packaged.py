@@ -145,14 +145,22 @@ class SubprocessAPI:
                 model = data.get('model', 'yolov8n.pt')
                 save_results = data.get('save_results', False)
                 results_folder = data.get('results_folder', '')
-                
+
+                # New multi-detector payload (currently single-element).
+                # When present, it overrides the legacy single-model fields.
+                detectors_list = data.get('detectors')
+                if isinstance(detectors_list, list) and detectors_list:
+                    first = detectors_list[0]
+                    model = first.get('variant', model)
+                    confidence = first.get('confidence', confidence)
+
                 # Start processing in a separate thread
                 thread = threading.Thread(
                     target=self.face_processor.process_folder,
                     args=(folder_path, confidence, model, save_results, results_folder)
                 )
                 thread.start()
-                
+
                 return {'status': 'success', 'message': 'Processing started'}
                 
             elif cmd_type == 'stop_processing':
