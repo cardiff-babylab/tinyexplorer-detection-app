@@ -37,13 +37,38 @@ def setup_bundled_environment():
     
     # Add bundled environment directory
     if os.path.exists(env_dir):
+        # Locate the venv's site-packages — that's where cv2/torch/etc. actually live.
+        # POSIX layout: <env>/lib/pythonX.Y/site-packages
+        # Windows layout: <env>\Lib\site-packages
+        site_packages_dir = None
+        lib_dir = os.path.join(env_dir, 'lib')
+        if os.path.exists(lib_dir):
+            for entry in sorted(os.listdir(lib_dir)):
+                if entry.startswith('python'):
+                    candidate = os.path.join(lib_dir, entry, 'site-packages')
+                    if os.path.exists(candidate):
+                        site_packages_dir = candidate
+                        break
+        if site_packages_dir is None:
+            win_candidate = os.path.join(env_dir, 'Lib', 'site-packages')
+            if os.path.exists(win_candidate):
+                site_packages_dir = win_candidate
+
+        # Insert site-packages first so it wins over anything else; then env_dir
+        # for any loose modules sitting at the env root.
+        if site_packages_dir:
+            sys.path.insert(0, site_packages_dir)
+            print(f"Added bundled site-packages: {site_packages_dir}", file=sys.stderr)
         sys.path.insert(0, env_dir)
         print(f"Using bundled {model_type} environment: {env_dir}", file=sys.stderr)
-        
-        # Set environment variables to isolate from system Python
-        os.environ['PYTHONPATH'] = env_dir
+
+        # Set PYTHONPATH so subprocesses (if any) inherit the same view.
+        sep = ';' if os.name == 'nt' else ':'
+        os.environ['PYTHONPATH'] = (
+            f"{site_packages_dir}{sep}{env_dir}" if site_packages_dir else env_dir
+        )
         os.environ['PYTHONNOUSERSITE'] = '1'  # Ignore user site-packages
-        
+
         # Disable site packages to avoid conflicts
         site.ENABLE_USER_SITE = False
     else:
