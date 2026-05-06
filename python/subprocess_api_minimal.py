@@ -75,7 +75,7 @@ class MinimalSubprocessAPI:
             elif cmd_type == 'get_models':
                 # In packaged mode, inform user about limitations
                 return {
-                    'status': 'warning', 
+                    'status': 'warning',
                     'models': [
                         '⚠️ ML Libraries Not Bundled - Run from Source for Full Features',
                         'Note: Face detection models require 3.7GB+ of ML libraries',
@@ -83,7 +83,14 @@ class MinimalSubprocessAPI:
                     ],
                     'message': 'The packaged app does not include ML libraries to keep size manageable. Run from source for full functionality.'
                 }
-                
+
+            elif cmd_type == 'list_detectors':
+                return {
+                    'status': 'warning',
+                    'detectors': {},
+                    'message': 'The minimal subprocess does not include the detector framework. Run in development mode for the full feature set.'
+                }
+
             elif cmd_type == 'start_processing':
                 try:
                     self.logger.info(f"Received start_processing command with data: {data}")

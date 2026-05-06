@@ -134,7 +134,14 @@ class SubprocessAPI:
                     return {'status': 'success', 'models': models}
                 except Exception as e:
                     return {'status': 'error', 'message': str(e)}
-                    
+
+            elif cmd_type == 'list_detectors':
+                try:
+                    from detectors import list_detectors
+                    return {'status': 'success', 'detectors': list_detectors()}
+                except Exception as e:
+                    return {'status': 'error', 'message': str(e)}
+
             elif cmd_type == 'load_model':
                 try:
                     model_path = data.get('model_path')

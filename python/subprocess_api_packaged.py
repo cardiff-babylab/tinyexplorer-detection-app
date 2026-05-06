@@ -114,11 +114,24 @@ class SubprocessAPI:
                 else:
                     # Return minimal model list for packaged app without ML dependencies
                     return {
-                        'status': 'warning', 
+                        'status': 'warning',
                         'models': ['Basic Detection (Not Available - ML packages not bundled)'],
                         'message': 'Face detection requires ML packages that are not included in the packaged app. Please run from source for full functionality.'
                     }
-                    
+
+            elif cmd_type == 'list_detectors':
+                if not FACE_DETECTION_AVAILABLE:
+                    return {
+                        'status': 'warning',
+                        'detectors': {},
+                        'message': 'Detector framework not available in this packaged build.'
+                    }
+                try:
+                    from detectors import list_detectors
+                    return {'status': 'success', 'detectors': list_detectors()}
+                except Exception as e:
+                    return {'status': 'error', 'message': str(e)}
+
             elif cmd_type == 'start_processing':
                 if not self.face_processor:
                     return {
