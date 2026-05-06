@@ -68,7 +68,7 @@ If you have ideas for new features, improvements, or bug fixes, please feel free
 ## Getting Started
 
 ### Install a Prebuilt Release (recommended)
-- Download the latest installer for your OS from the [Releases page](https://github.com/andreifoldes/tinyexplorer-detection-app/releases).
+- Download the latest installer for your OS from the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases).
 - Run the installer and launch the app.
 
 ### Build and Run Locally (fallback)
