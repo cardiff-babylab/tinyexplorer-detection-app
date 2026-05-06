@@ -25,6 +25,9 @@ const App = () => {
     const [resultsFolder, setResultsFolder] = useState("");
     const [completedResultsFolder, setCompletedResultsFolder] = useState("");
     const [isVideoFile, setIsVideoFile] = useState(false);
+    // Whether the current selection contains at least one video file. Speech
+    // mode requires this since static images carry no audio.
+    const [selectionHasVideo, setSelectionHasVideo] = useState(false);
     const [pythonReady, setPythonReady] = useState(false);
 
     // Send command to Python via IPC
@@ -255,6 +258,14 @@ const App = () => {
         }
     }, [detectorRegistry, selectedModel, selectedMode]);
 
+    // If the user picks an image-only selection while on Speech, snap back to
+    // Face — Speech can't run on still images.
+    useEffect(() => {
+        if (selectedMode === "speech" && !selectionHasVideo) {
+            setSelectedMode("face");
+        }
+    }, [selectionHasVideo, selectedMode]);
+
     const handleSelectResultsFolder = () => {
         console.log("Prompting user to select results folder");
         if (ipcRenderer) {
@@ -270,18 +281,28 @@ const App = () => {
         }
     };
 
+    // The Electron main process sends {path, hasVideo} for both folder and
+    // single-file browsing. Older code paths may still see a bare string.
+    const unpackSelection = (payload: any): { path: string; hasVideo: boolean } | null => {
+        if (!payload) return null;
+        if (typeof payload === "string") return { path: payload, hasVideo: false };
+        return { path: payload.path, hasVideo: !!payload.hasVideo };
+    };
+
     const handleBrowseFolder = () => {
         console.log("User clicked 'Browse Folder' button");
         if (ipcRenderer) {
             ipcRenderer.removeAllListeners("selected-folder");
-            
+
             ipcRenderer.send("browse-folder");
-            ipcRenderer.once("selected-folder", (event: any, folderPath: string) => {
-                if (folderPath) {
-                    console.log("User selected folder:", folderPath);
-                    setSelectedFolder(folderPath);
+            ipcRenderer.once("selected-folder", (event: any, payload: any) => {
+                const sel = unpackSelection(payload);
+                if (sel) {
+                    console.log("User selected folder:", sel.path, "hasVideo:", sel.hasVideo);
+                    setSelectedFolder(sel.path);
                     setIsVideoFile(false);
-                    
+                    setSelectionHasVideo(sel.hasVideo);
+
                     // Prompt for results folder
                     setTimeout(() => {
                         handleSelectResultsFolder();
@@ -295,19 +316,21 @@ const App = () => {
         console.log("User clicked 'Browse File' button");
         if (ipcRenderer) {
             ipcRenderer.removeAllListeners("selected-folder");
-            
+
             ipcRenderer.send("browse-file");
-            ipcRenderer.once("selected-folder", (event: any, filePath: string) => {
-                if (filePath) {
-                    console.log("User selected file:", filePath);
-                    setSelectedFolder(filePath);
-                    
-                    // Check if it's a video file
+            ipcRenderer.once("selected-folder", (event: any, payload: any) => {
+                const sel = unpackSelection(payload);
+                if (sel) {
+                    console.log("User selected file:", sel.path);
+                    setSelectedFolder(sel.path);
+
+                    // Single video file → both isVideoFile and selectionHasVideo are true.
                     const videoExtensions = ['.mp4', '.avi', '.mov'];
-                    const isVideo = videoExtensions.some(ext => filePath.toLowerCase().endsWith(ext));
+                    const isVideo = videoExtensions.some(ext => sel.path.toLowerCase().endsWith(ext));
                     setIsVideoFile(isVideo);
+                    setSelectionHasVideo(sel.hasVideo || isVideo);
                     console.log("Video file detected:", isVideo);
-                    
+
                     // Prompt for results folder
                     setTimeout(() => {
                         handleSelectResultsFolder();
@@ -554,14 +577,20 @@ const App = () => {
                             {KNOWN_MODES.map(mode => {
                                 const hasDetector = Object.values(detectorRegistry)
                                     .some(info => info.name === mode);
+                                const requiresVideo = mode === "speech";
+                                const blockedByNoVideo = requiresVideo && !selectionHasVideo;
+                                const disabled = !hasDetector || blockedByNoVideo;
                                 const modeLabel = mode.charAt(0).toUpperCase() + mode.slice(1);
+                                let title = `${modeLabel} detection`;
+                                if (!hasDetector) title = `${modeLabel} detection — coming soon`;
+                                else if (blockedByNoVideo) title = `${modeLabel} detection requires a video file in the selection`;
                                 return (
                                     <button
                                         key={mode}
                                         type="button"
                                         className={`mode-btn ${selectedMode === mode ? "active" : ""}`}
-                                        disabled={!hasDetector}
-                                        title={hasDetector ? `${modeLabel} detection` : `${modeLabel} detection — coming soon`}
+                                        disabled={disabled}
+                                        title={title}
                                         onClick={() => handleModeChange(mode)}
                                     >
                                         <span role="img" aria-label={`${mode} modality`}>

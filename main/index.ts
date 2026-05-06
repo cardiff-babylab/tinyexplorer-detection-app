@@ -10,6 +10,49 @@ if (process.platform === "linux" && (process.env.APPIMAGE || process.env.APPDIR)
 
 import { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } from "electron"; // tslint:disable-line
 import * as path from "path";
+import * as fs from "fs";
+
+// Speech detection requires audio, which only video files have. Use this to
+// gate the "Speech" mode button in the renderer. We bail early on first match
+// and cap the walk to keep huge folders responsive.
+const VIDEO_EXTENSIONS: ReadonlyArray<string> = [".mp4", ".avi", ".mov"];
+const FOLDER_SCAN_FILE_LIMIT = 5000;
+const FOLDER_SCAN_DEPTH_LIMIT = 6;
+
+function selectionHasVideo(selectedPath: string): boolean {
+    try {
+        const stat = fs.statSync(selectedPath);
+        if (stat.isFile()) {
+            return VIDEO_EXTENSIONS.some(ext => selectedPath.toLowerCase().endsWith(ext));
+        }
+        if (!stat.isDirectory()) return false;
+
+        const stack: Array<{ dir: string; depth: number }> = [{ dir: selectedPath, depth: 0 }];
+        let inspected = 0;
+        while (stack.length > 0) {
+            const { dir, depth } = stack.pop()!;
+            if (depth > FOLDER_SCAN_DEPTH_LIMIT) continue;
+            let entries: fs.Dirent[];
+            try {
+                entries = fs.readdirSync(dir, { withFileTypes: true });
+            } catch {
+                continue; // skip unreadable subdirs
+            }
+            for (const entry of entries) {
+                if (++inspected > FOLDER_SCAN_FILE_LIMIT) return false;
+                if (entry.isDirectory()) {
+                    stack.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
+                } else if (entry.isFile()) {
+                    const lower = entry.name.toLowerCase();
+                    if (VIDEO_EXTENSIONS.some(ext => lower.endsWith(ext))) return true;
+                }
+            }
+        }
+        return false;
+    } catch {
+        return false;
+    }
+}
 
 // Disable GPU acceleration for better compatibility with remote displays and AppImages
 app.disableHardwareAcceleration();
@@ -217,7 +260,8 @@ function createWindow() {
             properties: ["openDirectory"]
         });
         if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
-            event.sender.send("selected-folder", result.filePaths[0]);
+            const p = result.filePaths[0];
+            event.sender.send("selected-folder", { path: p, hasVideo: selectionHasVideo(p) });
         } else {
             event.sender.send("selected-folder", null);
         }
@@ -234,7 +278,8 @@ function createWindow() {
             ]
         });
         if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
-            event.sender.send("selected-folder", result.filePaths[0]);
+            const p = result.filePaths[0];
+            event.sender.send("selected-folder", { path: p, hasVideo: selectionHasVideo(p) });
         } else {
             event.sender.send("selected-folder", null);
         }
