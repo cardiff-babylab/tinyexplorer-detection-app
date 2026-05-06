@@ -93,7 +93,16 @@ jobs:
         # Verify all requirements
         "$RF_PY" - << 'PY'
         import sys
-        import pkg_resources as pr
+
+        # pkg_resources (setuptools) is no longer bundled with modern
+        # python-build-standalone interpreters. Use packaging.version
+        # which retina-face / tensorflow already pull in transitively.
+        try:
+            from packaging.version import parse as parse_version
+        except ImportError:
+            # Tuple fallback: only handles plain "X.Y.Z" releases.
+            def parse_version(s):
+                return tuple(int(p) for p in s.split('+')[0].split('.')[:3] if p.isdigit())
 
         def check(mod_name, attr='__version__', min_ver=None, display=None):
             try:
@@ -107,7 +116,7 @@ jobs:
                     mod = __import__(mod_name)
                     ver = getattr(mod, attr, '0')
                 name = display or mod_name
-                if min_ver and pr.parse_version(ver) < pr.parse_version(min_ver):
+                if min_ver and parse_version(ver) < parse_version(min_ver):
                     print(f"{name} {ver} < required {min_ver}")
                     sys.exit(1)
                 print(f"OK: {name} {ver}")
