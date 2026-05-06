@@ -15,6 +15,8 @@ const App = () => {
     const [progressMessages, setProgressMessages] = useState<string[]>([]);
     const [hasProgressMessages, setHasProgressMessages] = useState(false);
     const [availableModels, setAvailableModels] = useState<string[]>([]);
+    type DetectorInfo = { name: string; variants: string[]; kind: string };
+    const [detectorRegistry, setDetectorRegistry] = useState<Record<string, DetectorInfo>>({});
     const [results, setResults] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
     const [resultsFolder, setResultsFolder] = useState("");
     const [completedResultsFolder, setCompletedResultsFolder] = useState("");
@@ -49,6 +51,18 @@ const App = () => {
             ipcRenderer.send("python-command", command);
         });
     }, []);
+
+    // Load detector registry (modality + variants + kind, used for grouping/icons)
+    const loadDetectorRegistry = useCallback(async () => {
+        try {
+            const response = await sendPythonCommand({ type: 'list_detectors' });
+            if (response.status === 'success' && response.detectors) {
+                setDetectorRegistry(response.detectors);
+            }
+        } catch (error) {
+            console.warn("Could not load detector registry:", error);
+        }
+    }, [sendPythonCommand]);
 
     // Load available models
     const loadAvailableModels = useCallback(async () => {
@@ -209,6 +223,7 @@ const App = () => {
             if (statusData.ready && availableModels.length === 0) {
                 // Load models when Python becomes ready
                 loadAvailableModels();
+                loadDetectorRegistry();
             }
         };
 
@@ -222,7 +237,7 @@ const App = () => {
             ipcRenderer.removeListener("python-event", handlePythonEvent);
             ipcRenderer.removeListener("pythonStatus", handlePythonStatus);
         };
-    }, [availableModels.length, loadAvailableModels, handleCompletionEvent, checkPythonStatus]);
+    }, [availableModels.length, loadAvailableModels, loadDetectorRegistry, handleCompletionEvent, checkPythonStatus]);
 
     const handleSelectResultsFolder = () => {
         console.log("Prompting user to select results folder");
@@ -321,6 +336,33 @@ const App = () => {
         
         // Fallback to original name if no match
         return modelName;
+    };
+
+    // Modality icon for the global confidence slider and dropdown grouping.
+    const getDetectorIcon = (modalityName: string): string => {
+        switch (modalityName) {
+            case "face": return "👤";
+            case "hand": return "✋";
+            case "speech": return "🎤";
+            case "pose": return "🧍";
+            default: return "🔍";
+        }
+    };
+
+    // "face_yolo" -> "YOLO", "face_retinaface" -> "Retinaface". For optgroup labels.
+    const formatBackendName = (detectorKey: string): string => {
+        const parts = detectorKey.split("_");
+        if (parts.length < 2) return detectorKey;
+        const backend = parts.slice(1).join(" ");
+        return backend.charAt(0).toUpperCase() + backend.slice(1);
+    };
+
+    // Find which detector owns a given variant (e.g. "yolov8n-face.pt" -> "face_yolo").
+    const getDetectorKeyForVariant = (variant: string): string | null => {
+        for (const [key, info] of Object.entries(detectorRegistry)) {
+            if (info.variants.includes(variant)) return key;
+        }
+        return null;
     };
 
     const handleModelChange = (newModel: string) => {
@@ -469,16 +511,36 @@ const App = () => {
 
                     <div className="control-section">
                         <label>Select Model:</label>
-                        <select 
-                            value={selectedModel} 
+                        <select
+                            value={selectedModel}
                             onChange={(e) => handleModelChange(e.target.value)}
                             className="model-select"
                         >
-                            {availableModels.map(model => (
-                                <option key={model} value={model}>
-                                    {getDisplayName(model)}
-                                </option>
-                            ))}
+                            {Object.keys(detectorRegistry).length > 0 ? (
+                                Object.entries(detectorRegistry).map(([key, info]) => {
+                                    const variants = info.variants.filter(v => availableModels.includes(v));
+                                    if (variants.length === 0) return null;
+                                    const modalityLabel = info.name.charAt(0).toUpperCase() + info.name.slice(1);
+                                    return (
+                                        <optgroup
+                                            key={key}
+                                            label={`${getDetectorIcon(info.name)} ${modalityLabel} — ${formatBackendName(key)}`}
+                                        >
+                                            {variants.map(model => (
+                                                <option key={model} value={model}>
+                                                    {getDisplayName(model)}
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    );
+                                })
+                            ) : (
+                                availableModels.map(model => (
+                                    <option key={model} value={model}>
+                                        {getDisplayName(model)}
+                                    </option>
+                                ))
+                            )}
                         </select>
                     </div>
 
