@@ -416,17 +416,27 @@ const App = () => {
         setCompletedResultsFolder(""); // Clear previous results folder
         
         try {
+            const detectorKey = getDetectorKeyForVariant(selectedModel);
+            const data: any = {
+                folder_path: selectedFolder,
+                confidence: confidenceThreshold,
+                model: selectedModel,  // legacy field, kept for backward compat
+                save_results: true,
+                results_folder: resultsFolder,
+            };
+            if (detectorKey) {
+                data.detectors = [{
+                    key: detectorKey,
+                    variant: selectedModel,
+                    confidence: confidenceThreshold,
+                }];
+            }
+
             const response = await sendPythonCommand({
                 type: 'start_processing',
-                data: {
-                    folder_path: selectedFolder,
-                    confidence: confidenceThreshold,
-                    model: selectedModel,
-                    save_results: true,
-                    results_folder: resultsFolder
-                }
+                data,
             });
-            
+
             if (response.status === 'success') {
                 console.log("Processing started successfully");
                 // Processing state will be updated by events
@@ -545,7 +555,22 @@ const App = () => {
                     </div>
 
                     <div className="control-section">
-                        <label>Select Confidence Threshold:</label>
+                        <label>
+                            {(() => {
+                                const detectorKey = getDetectorKeyForVariant(selectedModel);
+                                const info = detectorKey ? detectorRegistry[detectorKey] : null;
+                                return info ? (
+                                    <span
+                                        role="img"
+                                        aria-label={`${info.name} modality`}
+                                        className="modality-icon"
+                                    >
+                                        {getDetectorIcon(info.name)}{" "}
+                                    </span>
+                                ) : null;
+                            })()}
+                            Select Confidence Threshold:
+                        </label>
                         <div className="threshold-control">
                             <input 
                                 type="range" 
