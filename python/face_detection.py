@@ -15,7 +15,7 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 import cv2
 
@@ -158,6 +158,41 @@ class FaceDetectionProcessor:
             )
         return legacy
 
+    def _draw_detections(self, image, detections: List[Dict]):
+        """Return a copy of ``image`` with each detection's bbox + confidence drawn.
+
+        Pure helper used by both image and video pipelines so they render boxes
+        identically. The legacy face dict stores YOLO-style centre-xy or
+        RetinaFace-style top-left; we normalise to top-left here.
+        """
+        result_img = image.copy()
+        uses_centre = self._detector_uses_centre_xy()
+        for det in detections:
+            x = det["x"]
+            y = det["y"]
+            w = det["width"]
+            h = det["height"]
+            if uses_centre:
+                x = x - w / 2
+                y = y - h / 2
+            cv2.rectangle(
+                result_img,
+                (int(x), int(y)),
+                (int(x + w), int(y + h)),
+                (0, 255, 0),
+                2,
+            )
+            cv2.putText(
+                result_img,
+                f"{det['confidence']:.2f}",
+                (int(x), int(y - 5)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 255, 0),
+                1,
+            )
+        return result_img
+
     def _save_annotated_image(
         self,
         image,
@@ -167,37 +202,10 @@ class FaceDetectionProcessor:
     ) -> None:
         """Draw bboxes onto the image and save into ``result_folder/results/``."""
         try:
-            result_img = image.copy()
-            for det in detections:
-                # Legacy face dict stores YOLO-style centre-xy or RetinaFace-style top-left;
-                # both are unpacked the same way for visualization since we only need the box.
-                x = det["x"]
-                y = det["y"]
-                w = det["width"]
-                h = det["height"]
-                # YOLO centred coords → top-left for drawing.
-                if self._detector_uses_centre_xy():
-                    x = x - w / 2
-                    y = y - h / 2
-                cv2.rectangle(
-                    result_img,
-                    (int(x), int(y)),
-                    (int(x + w), int(y + h)),
-                    (0, 255, 0),
-                    2,
-                )
-                cv2.putText(
-                    result_img,
-                    f"{det['confidence']:.2f}",
-                    (int(x), int(y - 5)),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (0, 255, 0),
-                    1,
-                )
+            annotated = self._draw_detections(image, detections)
             out_dir = os.path.join(result_folder, "results")
             os.makedirs(out_dir, exist_ok=True)
-            safe_imwrite(os.path.join(out_dir, os.path.basename(image_path)), result_img)
+            safe_imwrite(os.path.join(out_dir, os.path.basename(image_path)), annotated)
         except Exception as e:
             self._emit(
                 f"{_STATUS_SYMBOLS['error']} Error saving result image: {e}"
@@ -442,13 +450,39 @@ class FaceDetectionProcessor:
                     raw_dets = []
 
                 detections = [d.to_legacy_face_dict(video_path) for d in raw_dets]
+                timestamp = frame_idx / fps if fps > 0 else 0.0
                 if detections:
                     frames_with_faces += 1
-                    timestamp = frame_idx / fps if fps > 0 else 0.0
                     for det in detections:
                         det["frame_idx"] = frame_idx
                         det["timestamp"] = timestamp
                     all_detections.extend(detections)
+
+                    if result_folder:
+                        try:
+                            annotated = self._draw_detections(frame, detections)
+                            out_dir = os.path.join(result_folder, "results")
+                            os.makedirs(out_dir, exist_ok=True)
+                            video_stem = os.path.splitext(os.path.basename(video_path))[0]
+                            out_name = f"{video_stem}_frame_{frame_idx:06d}.jpg"
+                            safe_imwrite(os.path.join(out_dir, out_name), annotated)
+                        except Exception as e:
+                            self._emit(
+                                f"{_STATUS_SYMBOLS['error']} Error saving annotated frame {frame_idx} of {os.path.basename(video_path)}: {e}"
+                            )
+                else:
+                    # Record the sample so the CSV can show "frame processed, no faces".
+                    all_detections.append({
+                        "image_path": video_path,
+                        "frame_idx": frame_idx,
+                        "timestamp": timestamp,
+                        "x": None,
+                        "y": None,
+                        "width": None,
+                        "height": None,
+                        "confidence": None,
+                        "_no_face": True,
+                    })
 
                 if self.completion_callback:
                     self.completion_callback({
@@ -469,6 +503,11 @@ class FaceDetectionProcessor:
                 f"{_STATUS_SYMBOLS['complete']} Video processing complete. "
                 f"{frames_with_faces}/{processed_frames} frames with faces ({face_pct:.1f}%)"
             )
+            if result_folder and frames_with_faces:
+                self._emit(
+                    f"{_STATUS_SYMBOLS['folder']} Saved {frames_with_faces} annotated "
+                    f"frame(s) to {os.path.join(result_folder, 'results')}"
+                )
             return all_detections
         except Exception as e:
             self._emit(f"{_STATUS_SYMBOLS['error']} Error processing video: {e}")
@@ -486,16 +525,34 @@ class FaceDetectionProcessor:
     # ---- CSV export --------------------------------------------------------
 
     def export_results_to_csv(self, results: List[Dict], output_path: str) -> bool:
+        """Write detection results as one row per (image | sampled video frame).
+
+        Schema: ``id, frame_idx, filename, face_detected, face_count, face_N_x,
+        face_N_y, face_N_width, face_N_height, face_N_confidence`` (N grows up
+        to the largest face count seen). ``frame_idx`` is empty for image rows;
+        for video frames with no faces it is the frame index but per-face
+        columns stay empty.
+        """
         try:
             if not results:
                 self._emit(f"{_STATUS_SYMBOLS['warning']} No results to export")
                 return False
-            image_results: Dict[str, List[Dict]] = {}
-            for det in results:
-                image_results.setdefault(det["image_path"], []).append(det)
 
-            max_faces = max(len(v) for v in image_results.values())
-            headers = ["filename", "face_detected", "face_count"]
+            # Group by (image_path, frame_idx). frame_idx is None for images,
+            # which keeps each image as its own row and each video frame as a
+            # separate row even though they share the video's path.
+            groups: Dict[Tuple[str, Optional[int]], List[Dict]] = {}
+            order: List[Tuple[str, Optional[int]]] = []
+            for det in results:
+                key = (det["image_path"], det.get("frame_idx"))
+                if key not in groups:
+                    groups[key] = []
+                    order.append(key)
+                if not det.get("_no_face"):
+                    groups[key].append(det)
+
+            max_faces = max((len(v) for v in groups.values()), default=0)
+            headers = ["id", "frame_idx", "filename", "face_detected", "face_count"]
             for i in range(max_faces):
                 headers.extend([
                     f"face_{i+1}_x",
@@ -506,8 +563,16 @@ class FaceDetectionProcessor:
                 ])
 
             rows = []
-            for image_path, dets in image_results.items():
-                row = [os.path.basename(image_path), 1 if dets else 0, len(dets)]
+            for row_id, key in enumerate(order, start=1):
+                path, frame_idx = key
+                dets = groups[key]
+                row = [
+                    row_id,
+                    "" if frame_idx is None else frame_idx,
+                    os.path.basename(path),
+                    1 if dets else 0,
+                    len(dets),
+                ]
                 for det in dets:
                     row.extend([det["x"], det["y"], det["width"], det["height"], det["confidence"]])
                 while len(row) < len(headers):
@@ -579,7 +644,10 @@ class FaceDetectionProcessor:
                             f"{_STATUS_SYMBOLS['warning']} Could not get video info for {video_file}: {e}"
                         )
 
-                video_frames_with_faces = sum(1 for d in self.results if "frame_idx" in d)
+                video_frames_with_faces = sum(
+                    1 for d in self.results
+                    if "frame_idx" in d and not d.get("_no_face")
+                )
                 pct = (
                     (video_frames_with_faces / total_video_frames) * 100
                     if total_video_frames else 0
