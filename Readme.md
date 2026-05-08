@@ -28,7 +28,7 @@ The TinyExplorer Detection App is a user-friendly graphical interface designed w
 - Ideal for working with sensitive research data involving human subjects
 
 
-## Face Recognition Models
+## Face Detection Models
 
 Choose from multiple face detection models included in the app:
 
