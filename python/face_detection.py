@@ -597,6 +597,13 @@ class FaceDetectionProcessor:
         result_folder: str,
         output_path: str,
     ) -> bool:
+        """Write a per-file summary so each input file is auditable on its own.
+
+        Schema: ``path, type, total_processed_frames, total_duration,
+        processed_frames_with_faces, face_percentage, model,
+        confidence_threshold``. One row per image (frames=1, duration=N/A) and
+        one row per video (frames = sampled frames, duration = seconds).
+        """
         try:
             headers = [
                 "path",
@@ -608,59 +615,62 @@ class FaceDetectionProcessor:
                 "model",
                 "confidence_threshold",
             ]
+
+            # Group results by source path so each row can be answered without
+            # rescanning self.results.
+            by_path: Dict[str, List[Dict]] = {}
+            for det in self.results:
+                by_path.setdefault(det["image_path"], []).append(det)
+
+            model_label = self.current_model_path or "Unknown"
+            conf_label = getattr(self, "current_confidence", "Unknown")
             rows = []
 
-            if image_files:
-                paths_with_faces = {
-                    d["image_path"] for d in self.results
-                    if any(d["image_path"].endswith(os.path.basename(img)) for img in image_files)
-                }
-                pct = (len(paths_with_faces) / len(image_files)) * 100 if image_files else 0
+            for img_path in image_files:
+                dets = by_path.get(img_path, [])
+                has_faces = any(not d.get("_no_face") for d in dets)
                 rows.append([
-                    folder_path,
-                    "image(s)",
-                    len(image_files),
+                    img_path,
+                    "image",
+                    1,
                     "N/A",
-                    len(paths_with_faces),
-                    pct,
-                    self.current_model_path or "Unknown",
-                    getattr(self, "current_confidence", "Unknown"),
+                    1 if has_faces else 0,
+                    100.0 if has_faces else 0.0,
+                    model_label,
+                    conf_label,
                 ])
 
-            if video_files:
-                total_video_frames = 0
-                total_duration = 0.0
-                for video_file in video_files:
-                    try:
-                        cap = cv2.VideoCapture(video_file)
-                        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                        fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
-                        if fps > 0:
-                            total_duration += frame_count / fps
-                            total_video_frames += frame_count // max(1, int(fps))
-                        cap.release()
-                    except Exception as e:
-                        self._emit(
-                            f"{_STATUS_SYMBOLS['warning']} Could not get video info for {video_file}: {e}"
-                        )
-
-                video_frames_with_faces = sum(
-                    1 for d in self.results
+            for video_file in video_files:
+                dets = by_path.get(video_file, [])
+                sampled_frames = len({
+                    d["frame_idx"] for d in dets if "frame_idx" in d
+                })
+                frames_with_faces = len({
+                    d["frame_idx"] for d in dets
                     if "frame_idx" in d and not d.get("_no_face")
-                )
-                pct = (
-                    (video_frames_with_faces / total_video_frames) * 100
-                    if total_video_frames else 0
-                )
+                })
+                duration = 0.0
+                try:
+                    cap = cv2.VideoCapture(video_file)
+                    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
+                    if fps > 0:
+                        duration = frame_count / fps
+                    cap.release()
+                except Exception as e:
+                    self._emit(
+                        f"{_STATUS_SYMBOLS['warning']} Could not get video info for {video_file}: {e}"
+                    )
+                pct = (frames_with_faces / sampled_frames * 100) if sampled_frames else 0.0
                 rows.append([
-                    folder_path,
-                    "video(s)",
-                    total_video_frames,
-                    total_duration,
-                    video_frames_with_faces,
+                    video_file,
+                    "video",
+                    sampled_frames,
+                    duration,
+                    frames_with_faces,
                     pct,
-                    self.current_model_path or "Unknown",
-                    getattr(self, "current_confidence", "Unknown"),
+                    model_label,
+                    conf_label,
                 ])
 
             with open(output_path, "w", newline="") as f:
