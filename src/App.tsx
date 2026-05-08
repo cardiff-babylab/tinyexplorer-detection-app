@@ -17,17 +17,21 @@ const App = () => {
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     type DetectorInfo = { name: string; variants: string[]; kind: string };
     const [detectorRegistry, setDetectorRegistry] = useState<Record<string, DetectorInfo>>({});
-    // Modalities surfaced in the UI. Hand and speech show as disabled placeholders
-    // until a collaborator drops a matching detector into python/detectors/.
+    // Modalities surfaced in the UI. Hand and Speech are disabled placeholders
+    // until detectors for them land in python/detectors/. Flip the entry to
+    // `true` to enable; the rest of the UI (model dropdown, registry lookup) is
+    // already wired to handle them.
     const KNOWN_MODES: ReadonlyArray<string> = ["face", "hand", "speech"];
+    const MODE_AVAILABILITY: Readonly<Record<string, boolean>> = {
+        face: true,
+        hand: false,
+        speech: false,
+    };
     const [selectedMode, setSelectedMode] = useState<string>("face");
     const [results, setResults] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
     const [resultsFolder, setResultsFolder] = useState("");
     const [completedResultsFolder, setCompletedResultsFolder] = useState("");
     const [isVideoFile, setIsVideoFile] = useState(false);
-    // Whether the current selection contains at least one video file. Speech
-    // mode requires this since static images carry no audio.
-    const [selectionHasVideo, setSelectionHasVideo] = useState(false);
     const [pythonReady, setPythonReady] = useState(false);
 
     // Send command to Python via IPC
@@ -63,6 +67,7 @@ const App = () => {
     const loadDetectorRegistry = useCallback(async () => {
         try {
             const response = await sendPythonCommand({ type: 'list_detectors' });
+            console.log("list_detectors response:", response);
             if (response.status === 'success' && response.detectors) {
                 setDetectorRegistry(response.detectors);
             }
@@ -258,24 +263,17 @@ const App = () => {
         }
     }, [detectorRegistry, selectedModel, selectedMode]);
 
-    // If the user picks an image-only selection while on Speech, snap back to
-    // Face — Speech can't run on still images.
-    useEffect(() => {
-        if (selectedMode === "speech" && !selectionHasVideo) {
-            setSelectedMode("face");
-        }
-    }, [selectionHasVideo, selectedMode]);
-
     const handleSelectResultsFolder = () => {
         console.log("Prompting user to select results folder");
         if (ipcRenderer) {
             ipcRenderer.removeAllListeners("selected-folder");
-            
+
             ipcRenderer.send("browse-folder");
-            ipcRenderer.once("selected-folder", (event: any, folderPath: string) => {
-                if (folderPath) {
-                    console.log("User selected results folder:", folderPath);
-                    setResultsFolder(folderPath);
+            ipcRenderer.once("selected-folder", (event: any, payload: any) => {
+                const sel = unpackSelection(payload);
+                if (sel) {
+                    console.log("User selected results folder:", sel.path);
+                    setResultsFolder(sel.path);
                 }
             });
         }
@@ -298,10 +296,9 @@ const App = () => {
             ipcRenderer.once("selected-folder", (event: any, payload: any) => {
                 const sel = unpackSelection(payload);
                 if (sel) {
-                    console.log("User selected folder:", sel.path, "hasVideo:", sel.hasVideo);
+                    console.log("User selected folder:", sel.path);
                     setSelectedFolder(sel.path);
                     setIsVideoFile(false);
-                    setSelectionHasVideo(sel.hasVideo);
 
                     // Prompt for results folder
                     setTimeout(() => {
@@ -324,11 +321,9 @@ const App = () => {
                     console.log("User selected file:", sel.path);
                     setSelectedFolder(sel.path);
 
-                    // Single video file → both isVideoFile and selectionHasVideo are true.
                     const videoExtensions = ['.mp4', '.avi', '.mov'];
                     const isVideo = videoExtensions.some(ext => sel.path.toLowerCase().endsWith(ext));
                     setIsVideoFile(isVideo);
-                    setSelectionHasVideo(sel.hasVideo || isVideo);
                     console.log("Video file detected:", isVideo);
 
                     // Prompt for results folder
@@ -575,15 +570,12 @@ const App = () => {
                         <label>Select Mode:</label>
                         <div className="mode-selector">
                             {KNOWN_MODES.map(mode => {
-                                const hasDetector = Object.values(detectorRegistry)
-                                    .some(info => info.name === mode);
-                                const requiresVideo = mode === "speech";
-                                const blockedByNoVideo = requiresVideo && !selectionHasVideo;
-                                const disabled = !hasDetector || blockedByNoVideo;
+                                const hasDetector = MODE_AVAILABILITY[mode] === true;
+                                const disabled = !hasDetector;
                                 const modeLabel = mode.charAt(0).toUpperCase() + mode.slice(1);
-                                let title = `${modeLabel} detection`;
-                                if (!hasDetector) title = `${modeLabel} detection — coming soon`;
-                                else if (blockedByNoVideo) title = `${modeLabel} detection requires a video file in the selection`;
+                                const title = hasDetector
+                                    ? `${modeLabel} detection`
+                                    : `${modeLabel} detection — coming soon`;
                                 return (
                                     <button
                                         key={mode}
