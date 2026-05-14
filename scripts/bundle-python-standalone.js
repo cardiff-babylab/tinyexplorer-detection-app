@@ -205,10 +205,13 @@ async function createVirtualEnvironments(pythonStandaloneDir) {
     console.log('Creating virtual environments with standalone Python...');
     
     // Create YOLO virtual environment
+    // Use --copies so venv/bin/python* are real binaries, not symlinks.
+    // Symlinks dangle after electron-builder packaging and cause
+    // confusing "xattr: No such file" warnings when users strip quarantine.
     console.log('Creating YOLO virtual environment...');
-    execSync(`"${pythonExe}" -m venv "${yoloEnvDir}"`, { stdio: 'inherit' });
-    
-    // Fix symlinks to be relative for relocatability
+    execSync(`"${pythonExe}" -m venv --copies "${yoloEnvDir}"`, { stdio: 'inherit' });
+
+    // Ensure no stray absolute/dotted symlinks remain (no-op when --copies worked)
     fixVenvPythonSymlinks(yoloEnvDir, pythonStandaloneDir);
     // Install YOLO packages
     const yoloPython = platform === 'win32'
@@ -226,11 +229,10 @@ async function createVirtualEnvironments(pythonStandaloneDir) {
         env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1' }
     });
     
-    // Create RetinaFace virtual environment
+    // Create RetinaFace virtual environment (see comment above re: --copies)
     console.log('Creating RetinaFace virtual environment...');
-    execSync(`"${pythonExe}" -m venv "${retinafaceEnvDir}"`, { stdio: 'inherit' });
-    
-    // Fix symlinks to be relative for relocatability
+    execSync(`"${pythonExe}" -m venv --copies "${retinafaceEnvDir}"`, { stdio: 'inherit' });
+
     fixVenvPythonSymlinks(retinafaceEnvDir, pythonStandaloneDir);
     
     // Install RetinaFace packages

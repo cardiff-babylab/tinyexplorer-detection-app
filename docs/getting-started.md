@@ -36,7 +36,19 @@ Choose your operating system below for specific installation instructions:
          sudo xattr -r -d com.apple.quarantine /Applications/TinyExplorer\ Detection\ App.app
          ```
     5. Press **Enter** and type your Mac password when prompted
-    
+
+    !!! note "If you see `xattr: No such file` messages"
+        On some older builds the command prints a few warnings like
+        `xattr: No such file: .../python3.10`. These are **harmless** — they
+        refer to internal Python links inside the app bundle and do not mean
+        anything failed. The quarantine flag is still removed correctly and
+        the app will launch.
+
+        If you'd prefer a silent version, you can run instead:
+        ```bash
+        sudo xattr -r -d com.apple.quarantine /Applications/TinyExplorer\ Detection\ App.app 2>/dev/null
+        ```
+
     !!! tip "What does this command do?"
         - `sudo` - Runs the command with administrator privileges
         - `xattr` - Modifies file attributes
