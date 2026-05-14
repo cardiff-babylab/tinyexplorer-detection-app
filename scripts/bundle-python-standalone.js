@@ -204,10 +204,14 @@ async function createVirtualEnvironments(pythonStandaloneDir) {
     
     console.log('Creating virtual environments with standalone Python...');
     
-    // Create YOLO virtual environment
+    // Create YOLO virtual environment.
+    // NOTE: do not pass --copies. python-build-standalone resolves sys.prefix
+    // from the binary's install location; copying the binary breaks stdlib
+    // discovery and `ensurepip` SIGABRTs. Use symlinks and rely on
+    // fixVenvPythonSymlinks() to keep them relative for relocatability.
     console.log('Creating YOLO virtual environment...');
     execSync(`"${pythonExe}" -m venv "${yoloEnvDir}"`, { stdio: 'inherit' });
-    
+
     // Fix symlinks to be relative for relocatability
     fixVenvPythonSymlinks(yoloEnvDir, pythonStandaloneDir);
     // Install YOLO packages
@@ -226,10 +230,10 @@ async function createVirtualEnvironments(pythonStandaloneDir) {
         env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1' }
     });
     
-    // Create RetinaFace virtual environment
+    // Create RetinaFace virtual environment (see comment above re: --copies)
     console.log('Creating RetinaFace virtual environment...');
     execSync(`"${pythonExe}" -m venv "${retinafaceEnvDir}"`, { stdio: 'inherit' });
-    
+
     // Fix symlinks to be relative for relocatability
     fixVenvPythonSymlinks(retinafaceEnvDir, pythonStandaloneDir);
     
