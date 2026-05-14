@@ -30,29 +30,14 @@ The TinyExplorer Detection App is a user-friendly graphical interface designed s
 - Models are downloaded once and stored locally
 - Ideal for working with sensitive research data involving human subjects
 
-## Basic Usage
+## Installation
 
-### Install a Prebuilt Release (recommended)
-- Download the latest installer for your OS from the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases).
-- Run the installer and launch the app.
+Head over to **[Getting Started](getting-started.md)** for full, OS-specific installation instructions.
 
-### Build Locally with npm (fallback)
-If no release exists for your system or the installer doesn’t work, you can build locally.
+!!! warning "macOS users"
+    The app is not signed with an Apple Developer certificate, so macOS will block it from opening if you just drag it to Applications. The [Getting Started](getting-started.md) guide walks you through the one-time Terminal command needed to approve the app.
 
-- Install dependencies:
-  ```bash
-  npm install
-  ```
-- Start in development:
-  ```bash
-  npm run start
-  ```
-- Create a distributable build:
-  ```bash
-  npm run build
-  ```
-
-See also: [Supported File Formats](main-features.md#supported-file-formats) and [Getting Started](getting-started.md).
+See also: [Supported File Formats](main-features.md#supported-file-formats).
 
 ## Documentation Sections
 
