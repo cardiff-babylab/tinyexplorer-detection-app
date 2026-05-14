@@ -1,5 +1,8 @@
 # TinyExplorer Detection App
 
+[![Latest release](https://img.shields.io/github/v/release/cardiff-babylab/tinyexplorer-detection-app)](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/cardiff-babylab/tinyexplorer-detection-app/total)](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases)
+[![License](https://img.shields.io/github/license/cardiff-babylab/tinyexplorer-detection-app)](LICENSE.txt)
 
 <div align="center">
   <img src="docs/assets/screenshots/app-main-interface.png" alt="TinyExplorer Detection App Interface" />
