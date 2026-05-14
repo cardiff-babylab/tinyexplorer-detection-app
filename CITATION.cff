@@ -1,0 +1,44 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the accompanying article below."
+title: "TinyExplorer Detection App"
+type: software
+repository-code: "https://github.com/cardiff-babylab/tinyexplorer-detection-app"
+license: MIT
+authors:
+  - family-names: "Nikolov"
+    given-names: "Teodor Y."
+  - family-names: "Yurkovic-Harding"
+    given-names: "Julia"
+  - family-names: "Foldes"
+    given-names: "Tamas"
+  - family-names: "Bradshaw"
+    given-names: "Jessica"
+  - family-names: "Lai"
+    given-names: "Yu-Kun"
+  - family-names: "D'Souza"
+    given-names: "Hana"
+preferred-citation:
+  type: article
+  doi: "10.1111/desc.70148"
+  url: "https://doi.org/10.1111/desc.70148"
+  title: "Making machine learning accessible for developmental science: The case of automated face detection"
+  authors:
+    - family-names: "Nikolov"
+      given-names: "Teodor Y."
+    - family-names: "Yurkovic-Harding"
+      given-names: "Julia"
+    - family-names: "Foldes"
+      given-names: "Tamas"
+    - family-names: "Bradshaw"
+      given-names: "Jessica"
+    - family-names: "Lai"
+      given-names: "Yu-Kun"
+    - family-names: "D'Souza"
+      given-names: "Hana"
+  journal: "Developmental Science"
+  year: 2026
+  volume: 29
+  issue: 3
+  start: "e70148"
+  publisher:
+    name: "Wiley"
