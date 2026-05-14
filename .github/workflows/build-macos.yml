@@ -197,18 +197,23 @@ jobs:
 
     - name: Remove quarantine attributes from built app
       run: |
-        # Find and remove quarantine from .app bundles to prevent "damaged app" errors.
-        # Use find with -not -type l so we never try to follow a symlink — that's
-        # what produces "xattr: No such file" warnings users have reported.
-        for app in dist/*.app; do
-          if [ -d "$app" ]; then
-            echo "Removing quarantine attributes from: $app"
-            find "$app" -not -type l -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
-            if xattr -l "$app" 2>/dev/null | grep -q "com.apple.quarantine"; then
-              echo "Warning: Quarantine still present on $app"
-            else
-              echo "Successfully cleaned: $app"
-            fi
+        # electron-builder writes the .app inside dist/<target>/ (e.g.
+        # dist/mac-arm64/TinyExplorer Detection App.app), not directly in
+        # dist/, so use `find` to locate it. Skip symlinks (-not -type l)
+        # so we never try to follow a dangling link — that's what produces
+        # "xattr: No such file" warnings users have reported.
+        apps=$(find dist -maxdepth 3 -name '*.app' -type d)
+        if [ -z "$apps" ]; then
+          echo "No .app bundles found under dist/"
+          exit 0
+        fi
+        echo "$apps" | while IFS= read -r app; do
+          echo "Removing quarantine attributes from: $app"
+          find "$app" -not -type l -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
+          if xattr -l "$app" 2>/dev/null | grep -q "com.apple.quarantine"; then
+            echo "Warning: Quarantine still present on $app"
+          else
+            echo "Successfully cleaned: $app"
           fi
         done
 
