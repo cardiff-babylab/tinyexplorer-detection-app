@@ -21,6 +21,10 @@ The app automatically downloads required model weights when needed.
 - YOLO face weights: [cardiff-babylab/tinyexplorer-detection-app releases](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models) (originally from [akanametov/yolo-face](https://github.com/akanametov/yolo-face))
 - RetinaFace implementation: [serengil/retinaface](https://github.com/serengil/retinaface)
 
+## Sampling Rate
+- Current sampling rate of 1 frame per second (1fps)
+- Coming soon: adjustable slider for sampling rate
+  
 ## Confidence Threshold Adjustment
 - Adjustable slider from 0.0 to 1.0
 - Default confidence values tailored to each model
