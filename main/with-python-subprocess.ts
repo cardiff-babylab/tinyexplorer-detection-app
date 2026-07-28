@@ -11,6 +11,15 @@ const PY_LAUNCHER = "launcher"; // Launcher script for packaged mode
 
 const isDev = (process.env.NODE_ENV === "development");
 
+// Lightweight startup phase timing, gated behind STARTUP_TIMING (see main/index.ts).
+const subprocStart = Date.now();
+const startupTimingEnabled = Boolean(process.env.STARTUP_TIMING);
+function logStartupTiming(phase: string, extra?: string) {
+    if (startupTimingEnabled) {
+        try { console.log(`[timing] ${phase} ${Date.now() - subprocStart}ms${extra ? " " + extra : ""}`); } catch (e) {}
+    }
+}
+
 let pyProc: childProcess.ChildProcess | null = null;
 let pythonReady = false;
 let commandQueue: Array<{command: any, callback: Function}> = [];
@@ -286,7 +295,8 @@ const initializePython = async () => {
         cwd: path.dirname(scriptPath), // Set working directory to script location
         env: spawnEnv,
     });
-    
+    logStartupTiming("python_spawned");
+
     if (!pyProc) {
         try { console.log("Failed to start Python subprocess"); } catch (e) {}
         dialog.showErrorBox("Error", "Failed to start Python subprocess");
@@ -453,13 +463,16 @@ const handlePythonMessage = (message: any) => {
     if (message.type === 'ready') {
         pythonReady = true;
         try { console.log("Python subprocess is ready"); } catch (e) {}
-        
+        // message.startupMs is the Python-measured process-entry -> ready time.
+        logStartupTiming("python_ready", message.startupMs !== undefined ? `(python startupMs=${message.startupMs})` : undefined);
+
         // Notify all renderer processes that Python is ready
         const allWindows = Electron.BrowserWindow.getAllWindows();
         allWindows.forEach(window => {
             window.webContents.send('pythonStatus', {
                 ready: pythonReady,
-                pid: pyProc ? pyProc.pid : undefined
+                pid: pyProc ? pyProc.pid : undefined,
+                startupMs: message.startupMs
             });
         });
         

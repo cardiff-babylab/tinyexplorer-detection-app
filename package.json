@@ -30,7 +30,8 @@
         "setup-dev-envs": "node -e \"console.log(process.platform === 'win32' ? 'Running Windows setup...' : 'Running Unix setup...')\" && node -e \"require('child_process').execSync(process.platform === 'win32' ? 'scripts\\\\setup-dev-environments.bat' : './scripts/setup-dev-environments.sh', {stdio: 'inherit'})\"",
         "test": "npm run test:gui",
         "test:gui": "playwright test",
-        "test:gui:headed": "playwright test --headed"
+        "test:gui:headed": "playwright test --headed",
+        "test:python": "python -m pytest python/tests -v"
     },
     "dependencies": {
         "@types/cross-spawn": "^6.0.0",

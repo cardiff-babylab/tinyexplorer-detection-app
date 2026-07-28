@@ -12,6 +12,17 @@ import { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } f
 import * as path from "path";
 import * as fs from "fs";
 
+// Wall-clock at main-process entry, used for lightweight startup phase timing.
+// Verbose [timing] lines are gated behind the STARTUP_TIMING env var; the phase
+// marks below let us measure process-start -> window-shown -> python-ready.
+const processStart = Date.now();
+const startupTimingEnabled = Boolean(process.env.STARTUP_TIMING);
+function logStartupTiming(phase: string) {
+    if (startupTimingEnabled) {
+        try { console.log(`[timing] ${phase} ${Date.now() - processStart}ms`); } catch (e) {}
+    }
+}
+
 // Speech detection requires audio, which only video files have. Use this to
 // gate the "Speech" mode button in the renderer. We bail early on first match
 // and cap the walk to keep huge folders responsive.
@@ -68,6 +79,57 @@ if (process.platform === 'win32') {
 const isDev = (process.env.NODE_ENV === "development");
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null;
+let splash: BrowserWindow | null = null;
+
+// Minimal, self-contained splash shown the instant the app starts, so the user
+// sees immediate feedback instead of a blank screen while the React bundle loads
+// and the Python backend warms up. Kept as an inline data URL (no external assets,
+// no extra packaged files) so it always renders, even before first paint of the
+// main window. Closed once the main window is ready-to-show (or Python is ready).
+const SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;
+       background:linear-gradient(135deg,#1e293b,#0f172a);color:#e2e8f0;-webkit-user-select:none}
+  .title{font-size:18px;font-weight:600;margin-bottom:6px}
+  .sub{font-size:12px;color:#94a3b8;margin-bottom:22px}
+  .dots{display:flex;gap:8px}
+  .dot{width:9px;height:9px;border-radius:50%;background:#38bdf8;animation:b 1.2s infinite ease-in-out}
+  .dot:nth-child(2){animation-delay:.15s}.dot:nth-child(3){animation-delay:.3s}
+  @keyframes b{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+</style></head><body>
+  <div class="title">TinyExplorer Detection App</div>
+  <div class="sub">Starting up&hellip;</div>
+  <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+</body></html>`;
+
+function createSplash() {
+    try {
+        splash = new BrowserWindow({
+            width: 360,
+            height: 220,
+            frame: false,
+            resizable: false,
+            center: true,
+            show: true,
+            skipTaskbar: true,
+            webPreferences: {},
+        });
+        splash.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(SPLASH_HTML));
+        // Safety net: never let the splash outlive startup, even if 'ready-to-show'
+        // never fires for some reason.
+        setTimeout(closeSplash, 30000);
+    } catch (e) {
+        try { console.error("Failed to create splash window:", e); } catch (e2) {}
+        splash = null;
+    }
+}
+
+function closeSplash() {
+    if (splash && !splash.isDestroyed()) {
+        try { splash.close(); } catch (e) {}
+    }
+    splash = null;
+}
 
 // Add isQuitting property to app instance
 (app as any).isQuitting = false;
@@ -91,14 +153,18 @@ app.on('before-quit', () => {
 });
 
 app.on("ready", () => {
+    logStartupTiming("app_ready");
     if (isDev) {
         const sourceMapSupport = require("source-map-support"); // tslint:disable-line
         sourceMapSupport.install();
     }
-    
+
+    // Show the splash immediately so the user gets instant visual feedback.
+    createSplash();
+
     // Import Python subprocess handler after app is ready
     require("./with-python-subprocess");
-    
+
     createWindow();
     createTray();
 });
@@ -224,12 +290,26 @@ function createWindow() {
     
     mainWindow = new BrowserWindow({
         icon: windowIconPath,
+        // Start hidden and reveal on 'ready-to-show' so the user never sees a
+        // blank white window while the React bundle loads; the splash covers the
+        // gap until then.
+        show: false,
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false
         }
     });
-    
+
+    // Reveal the main window once its first paint is ready, then dismiss the splash.
+    mainWindow.once("ready-to-show", () => {
+        logStartupTiming("window_shown");
+        if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+        }
+        closeSplash();
+    });
+
     if (isDev) {
         mainWindow.webContents.openDevTools();
     }

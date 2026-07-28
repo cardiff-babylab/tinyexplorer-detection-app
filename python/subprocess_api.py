@@ -11,8 +11,26 @@ import threading
 import time
 import signal
 import atexit
+
+# Startup timing anchor. On Windows the multi_env_launcher is bypassed and this
+# module is the process entry point, so we anchor timing here rather than relying
+# on the launcher. Verbose [timing] lines are gated behind STARTUP_TIMING; the
+# startupMs field on the ready message is always sent (it is tiny).
+_STARTUP_T0 = time.time()
+_TIMING_ENABLED = bool(os.environ.get("STARTUP_TIMING"))
+
 from calc import calc as real_calc
+# NOTE: importing face_detection pulls in the detector registry. Thanks to the
+# detectors' lazy imports, this no longer drags in torch/TensorFlow, so it stays
+# cheap and does not block the "ready" signal below.
 from face_detection import FaceDetectionProcessor
+
+if _TIMING_ENABLED:
+    print(
+        f"[timing] face_detection_imported {(time.time() - _STARTUP_T0) * 1000:.0f}ms",
+        file=sys.stderr,
+        flush=True,
+    )
 
 class SubprocessAPI:
     def __init__(self):
@@ -272,8 +290,16 @@ class SubprocessAPI:
         """Main subprocess loop - read commands from stdin and send responses to stdout"""
         self.logger.info("Starting subprocess API...")
         
-        # Send ready signal
-        self.send_response({'type': 'ready', 'message': 'Python subprocess ready'})
+        # Send ready signal. startupMs measures process-entry -> ready, which the
+        # Electron main surfaces so we have a concrete launch-time metric.
+        startup_ms = round((time.time() - _STARTUP_T0) * 1000)
+        if _TIMING_ENABLED:
+            print(f"[timing] ready {startup_ms}ms", file=sys.stderr, flush=True)
+        self.send_response({
+            'type': 'ready',
+            'message': 'Python subprocess ready',
+            'startupMs': startup_ms,
+        })
         
         while self.running:
             try:

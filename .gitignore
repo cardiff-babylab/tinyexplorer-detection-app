@@ -125,6 +125,9 @@ Thumbs.db
 test-results/
 playwright-report/
 tests/
+# ...but keep the Python unit tests, which live in python/tests/
+!python/tests/
+!python/tests/**
 
 # Keep important files
 !README.md
