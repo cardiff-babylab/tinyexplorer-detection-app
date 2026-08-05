@@ -512,7 +512,7 @@ function createWindow() {
                 { name: 'CSV Files', extensions: ['csv'] },
                 { name: 'All Files', extensions: ['*'] }
             ],
-            defaultPath: 'face_detection_results.csv'
+            defaultPath: 'detection_results.csv'
         });
         if (!result.canceled && result.filePath) {
             event.sender.send("selected-save-path", result.filePath);
