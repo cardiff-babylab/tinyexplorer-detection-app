@@ -547,6 +547,19 @@ async function setupEnvironments() {
                 env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1' }
             });
 
+            // Build the HandObject native extension (model._C) from source against
+            // hand-env's torch. The upstream prebuilt Windows .pyd was CUDA-only and
+            // fails to load on CPU-only machines, so we compile a CPU .pyd here.
+            // Requires an activated MSVC toolchain (see build-windows.yml) +
+            // DISTUTILS_USE_SDK so setuptools reuses it.
+            console.log('Building HandObject native extension (CPU) from source ...');
+            const handLibDir = path.join(pythonSubDir, 'handobj', 'lib');
+            execSync(`"${handPython}" setup.py build_ext --inplace`, {
+                cwd: handLibDir,
+                stdio: 'inherit',
+                env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1', DISTUTILS_USE_SDK: '1' }
+            });
+
             console.log('Hand environment created successfully!');
         } catch (handError) {
             console.error('Failed to create Hand environment:', handError.message);
