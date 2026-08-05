@@ -28,6 +28,7 @@ from detectors import (
 from detectors._io import safe_imread, safe_imwrite
 from detectors.face_retinaface import is_available as _retinaface_available
 from detectors.face_yolo import is_available as _yolo_available
+from detectors.hand_handobj import is_available as _handobj_available
 
 
 _STATUS_SYMBOLS = {
@@ -41,6 +42,7 @@ _STATUS_SYMBOLS = {
     "video": "🎬",
     "detection": "🔍",
     "face": "👤",
+    "hand": "✋",
     "complete": "🏁",
 }
 
@@ -148,13 +150,15 @@ class FaceDetectionProcessor:
         if save_results and result_folder:
             self._save_annotated_image(image, legacy, image_path, result_folder)
 
+        noun = self._modality_noun()
+        icon = _STATUS_SYMBOLS.get(noun, _STATUS_SYMBOLS["face"])
         if legacy:
             self._emit(
-                f"{_STATUS_SYMBOLS['face']} Found {len(legacy)} face(s) in {os.path.basename(image_path)}"
+                f"{icon} Found {len(legacy)} {noun}(s) in {os.path.basename(image_path)}"
             )
         else:
             self._emit(
-                f"{_STATUS_SYMBOLS['complete']} No faces detected in {os.path.basename(image_path)}"
+                f"{_STATUS_SYMBOLS['complete']} No {noun}s detected in {os.path.basename(image_path)}"
             )
         return legacy
 
@@ -175,23 +179,48 @@ class FaceDetectionProcessor:
             if uses_centre:
                 x = x - w / 2
                 y = y - h / 2
+            is_hand = "state_label" in det or det.get("owner") is not None
+            if is_hand:
+                color, label = self._hand_box_style(det)
+            else:
+                color, label = (0, 255, 0), f"{det['confidence']:.2f}"
             cv2.rectangle(
                 result_img,
                 (int(x), int(y)),
                 (int(x + w), int(y + h)),
-                (0, 255, 0),
+                color,
                 2,
             )
             cv2.putText(
                 result_img,
-                f"{det['confidence']:.2f}",
+                label,
                 (int(x), int(y - 5)),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.5,
-                (0, 255, 0),
+                color,
                 1,
             )
         return result_img
+
+    @staticmethod
+    def _hand_box_style(det: Dict) -> Tuple[Tuple[int, int, int], str]:
+        """Return (BGR color, label) for a hand detection.
+
+        Colour encodes ownership (cyan=own, pink=other, white=unknown); the
+        label carries side, contact state and confidence.
+        """
+        owner = det.get("owner", "unknown")
+        color = {
+            "own": (255, 255, 0),      # cyan (BGR)
+            "other": (203, 192, 255),  # pink (BGR)
+        }.get(owner, (255, 255, 255))  # white for baseline / unknown
+        side = str(det.get("side", "")).capitalize()
+        state = det.get("state_label", "")
+        conf = det.get("confidence")
+        conf_str = f"{conf:.2f}" if isinstance(conf, (int, float)) else ""
+        owner_str = "" if owner == "unknown" else f" {owner}"
+        label = f"{side} {state}{owner_str} {conf_str}".strip()
+        return color, label
 
     def _save_annotated_image(
         self,
@@ -270,15 +299,27 @@ class FaceDetectionProcessor:
             self._process_video_batch(video_files, confidence_threshold, result_folder)
 
             if save_results and result_folder and self.results:
-                csv_path = os.path.join(result_folder, "detection_results.csv")
-                self.export_results_to_csv(self.results, csv_path)
-                summary_csv_path = os.path.join(result_folder, "summary.csv")
-                self.export_summary_to_csv(
-                    folder_path, image_files, video_files, result_folder, summary_csv_path
-                )
+                if self._active_modality() == "hand":
+                    csv_path = os.path.join(result_folder, "hand_detections.csv")
+                    self.export_hand_results_to_csv(self.results, csv_path)
+                    summary_csv_path = os.path.join(result_folder, "hand_summary.csv")
+                    self.export_hand_summary_to_csv(
+                        image_files, video_files, summary_csv_path
+                    )
+                else:
+                    csv_path = os.path.join(result_folder, "detection_results.csv")
+                    self.export_results_to_csv(self.results, csv_path)
+                    summary_csv_path = os.path.join(result_folder, "summary.csv")
+                    self.export_summary_to_csv(
+                        folder_path, image_files, video_files, result_folder, summary_csv_path
+                    )
 
+            detection_count = sum(
+                1 for d in self.results if not d.get("_no_face") and d.get("x") is not None
+            )
             self._emit(
-                f"{_STATUS_SYMBOLS['complete']} Processing complete. Found {len(self.results)} face detections across {total_files} files"
+                f"{_STATUS_SYMBOLS['complete']} Processing complete. Found {detection_count} "
+                f"{self._modality_noun()} detections across {total_files} files"
             )
             if save_results and result_folder:
                 self._emit(f"{_STATUS_SYMBOLS['folder']} Results saved to: {result_folder}")
@@ -683,6 +724,144 @@ class FaceDetectionProcessor:
             self._emit(f"{_STATUS_SYMBOLS['error']} Error exporting summary: {e}")
             return False
 
+    # ---- Hand-specific CSV export -----------------------------------------
+
+    def export_hand_results_to_csv(self, results: List[Dict], output_path: str) -> bool:
+        """Write one row per detected hand.
+
+        Schema: ``id, frame_idx, filename, hand_id, hand_x1, hand_y1, hand_x2,
+        hand_y2, hand_confidence, state, state_label, hand_side, owner``.
+        ``frame_idx`` is empty for image inputs.
+        """
+        try:
+            headers = [
+                "id", "frame_idx", "filename", "hand_id",
+                "hand_x1", "hand_y1", "hand_x2", "hand_y2", "hand_confidence",
+                "state", "state_label", "hand_side", "owner",
+            ]
+            rows = []
+            row_id = 0
+            for det in results:
+                if det.get("_no_face") or det.get("x") is None:
+                    continue
+                row_id += 1
+                x, y = det["x"], det["y"]
+                w, h = det["width"], det["height"]
+                frame_idx = det.get("frame_idx")
+                rows.append([
+                    row_id,
+                    "" if frame_idx is None else frame_idx,
+                    os.path.basename(det["image_path"]),
+                    det.get("hand_id", ""),
+                    x, y, x + w, y + h,
+                    det["confidence"],
+                    det.get("state", ""),
+                    det.get("state_label", ""),
+                    det.get("side", ""),
+                    det.get("owner", ""),
+                ])
+
+            with open(output_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+                writer.writerows(rows)
+            self._emit(f"{_STATUS_SYMBOLS['success']} Hand detections exported to {output_path}")
+            return True
+        except Exception as e:
+            self._emit(f"{_STATUS_SYMBOLS['error']} Error exporting hand results: {e}")
+            return False
+
+    def export_hand_summary_to_csv(
+        self,
+        image_files: List[str],
+        video_files: List[str],
+        output_path: str,
+    ) -> bool:
+        """Write one row per image (and per sampled video frame) with hand counts.
+
+        Schema: ``filename, frame_idx, img_w, img_h, n_hands, n_own, n_other,
+        n_state0_none, n_state1_self, n_state2_other, n_state3_portable,
+        n_state4_furniture``.
+        """
+        try:
+            headers = [
+                "filename", "frame_idx", "img_w", "img_h", "n_hands",
+                "n_own", "n_other",
+                "n_state0_none", "n_state1_self", "n_state2_other",
+                "n_state3_portable", "n_state4_furniture",
+            ]
+
+            groups: Dict[Tuple[str, Optional[int]], List[Dict]] = {}
+            for det in self.results:
+                if det.get("_no_face") or det.get("x") is None:
+                    continue
+                key = (det["image_path"], det.get("frame_idx"))
+                groups.setdefault(key, []).append(det)
+
+            def _summ(filename: str, frame_idx, img_w, img_h, dets: List[Dict]):
+                state_counts = {i: 0 for i in range(5)}
+                n_own = n_other = 0
+                for d in dets:
+                    st = d.get("state")
+                    if isinstance(st, int) and st in state_counts:
+                        state_counts[st] += 1
+                    owner = d.get("owner")
+                    if owner == "own":
+                        n_own += 1
+                    elif owner == "other":
+                        n_other += 1
+                return [
+                    filename,
+                    "" if frame_idx is None else frame_idx,
+                    img_w, img_h, len(dets), n_own, n_other,
+                    state_counts[0], state_counts[1], state_counts[2],
+                    state_counts[3], state_counts[4],
+                ]
+
+            rows = []
+            for img_path in image_files:
+                dets = groups.pop((img_path, None), [])
+                w, h = self._image_dims(img_path)
+                rows.append(_summ(os.path.basename(img_path), None, w, h, dets))
+
+            # Any remaining groups are video frames (path, frame_idx).
+            for (path, frame_idx), dets in groups.items():
+                rows.append(_summ(os.path.basename(path), frame_idx, "", "", dets))
+
+            with open(output_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+                writer.writerows(rows)
+            self._emit(f"{_STATUS_SYMBOLS['success']} Hand summary exported to {output_path}")
+            return True
+        except Exception as e:
+            self._emit(f"{_STATUS_SYMBOLS['error']} Error exporting hand summary: {e}")
+            return False
+
+    def _image_dims(self, path: str) -> Tuple[object, object]:
+        """Return (width, height) of an image without fully decoding when possible."""
+        try:
+            from PIL import Image
+
+            with Image.open(path) as im:
+                return im.width, im.height
+        except Exception:
+            try:
+                img = cv2.imread(path)
+                if img is not None:
+                    return img.shape[1], img.shape[0]
+            except Exception:
+                pass
+        return "", ""
+
+    def _active_modality(self) -> str:
+        """Modality of the loaded detector ('face' | 'hand' | ...); defaults to 'face'."""
+        name = getattr(self.detector, "name", None)
+        return name or "face"
+
+    def _modality_noun(self) -> str:
+        return self._active_modality()
+
     # ---- Available-model listing ------------------------------------------
 
     def get_available_models(self) -> List[str]:
@@ -693,10 +872,16 @@ class FaceDetectionProcessor:
         env_flags = _detect_environments()
 
         models: List[str] = []
-        if env_flags["any_yolo"] or env_flags["any_retinaface"]:
+        any_bundled = (
+            env_flags["any_yolo"]
+            or env_flags["any_retinaface"]
+            or env_flags["any_hand"]
+        )
+        if any_bundled:
             print(
                 f"Detected model environments - YOLO: {env_flags['any_yolo']}, "
-                f"RetinaFace: {env_flags['any_retinaface']}",
+                f"RetinaFace: {env_flags['any_retinaface']}, "
+                f"Hand: {env_flags['any_hand']}",
                 file=sys.stderr,
             )
             for key, info in list_detectors().items():
@@ -706,6 +891,8 @@ class FaceDetectionProcessor:
                     models.extend(info["variants"])  # type: ignore[arg-type]
                 elif "retinaface" in key and env_flags["any_retinaface"]:
                     models.extend(info["variants"])  # type: ignore[arg-type]
+                elif "hand" in key and env_flags["any_hand"]:
+                    models.extend(info["variants"])  # type: ignore[arg-type]
         else:
             for key, info in list_detectors().items():
                 if info["kind"] != "vision":
@@ -713,6 +900,8 @@ class FaceDetectionProcessor:
                 if "yolo" in key and _yolo_available():
                     models.extend(info["variants"])  # type: ignore[arg-type]
                 elif "retinaface" in key and _retinaface_available():
+                    models.extend(info["variants"])  # type: ignore[arg-type]
+                elif "hand" in key and _handobj_available():
                     models.extend(info["variants"])  # type: ignore[arg-type]
         return models
 
@@ -735,9 +924,11 @@ def _detect_environments() -> Dict[str, bool]:
     parent_dir = os.path.dirname(script_dir)
     yolo_env_path = os.path.join(parent_dir, "yolo-env")
     retinaface_env_path = os.path.join(parent_dir, "retinaface-env")
+    hand_env_path = os.path.join(parent_dir, "hand-env")
 
     has_yolo_env = os.path.exists(yolo_env_path)
     has_retinaface_env = os.path.exists(retinaface_env_path)
+    has_hand_env = os.path.exists(hand_env_path)
 
     conda_env_dirs: List[str] = []
     try:
@@ -766,11 +957,17 @@ def _detect_environments() -> Dict[str, bool]:
     has_retinaface_conda = any(
         os.path.exists(os.path.join(d, "electron-python-retinaface")) for d in conda_env_dirs
     )
+    has_hand_conda = any(
+        os.path.exists(os.path.join(d, "electron-python-hand")) for d in conda_env_dirs
+    )
     return {
         "any_yolo": has_yolo_env or has_yolo_conda,
         "any_retinaface": has_retinaface_env or has_retinaface_conda,
+        "any_hand": has_hand_env or has_hand_conda,
         "yolo_bundled": has_yolo_env,
         "retinaface_bundled": has_retinaface_env,
+        "hand_bundled": has_hand_env,
         "yolo_conda": has_yolo_conda,
         "retinaface_conda": has_retinaface_conda,
+        "hand_conda": has_hand_conda,
     }
