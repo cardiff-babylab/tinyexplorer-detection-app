@@ -83,6 +83,12 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+# Vendored HandObject native extension. The macOS build (CPU, arm64, CPython 3.10)
+# is committed and shipped as-is; re-include it past the *.so rule above. The
+# Windows _C.pyd is NOT committed — it is compiled from model/csrc at bundle time
+# (the upstream prebuilt .pyd was CUDA-only and fails to load on CPU-only machines).
+!python/handobj/lib/model/_C.cpython-310-darwin.so
 env/
 venv/
 .venv/

@@ -188,19 +188,38 @@ async function createVirtualEnvironments(pythonStandaloneDir) {
         throw new Error(`Python executable not found at: ${pythonExe}`);
     }
     
-    // Create both environment directories
+    // Create environment directories (one per modality backend)
     const yoloEnvDir = path.join(pythonDistDir, 'yolo-env');
     const retinafaceEnvDir = path.join(pythonDistDir, 'retinaface-env');
-    
+    const handEnvDir = path.join(pythonDistDir, 'hand-env');
+
     // Copy Python source files to python subdirectory
     console.log('Copying Python source files...');
     const pythonSubDir = path.join(pythonDistDir, 'python');
     fs.mkdirSync(pythonSubDir, { recursive: true });
     execSync(`cp -r python/ ${pythonSubDir}/`);
-    
+
+    // The vendored HandObject native extension is an ad-hoc-signed Mach-O. Strip
+    // any quarantine and re-sign the bundled copy so Gatekeeper allows loading it
+    // inside the app. Best-effort: the git-committed ad-hoc signature already
+    // travels with the file, so a codesign hiccup should not fail the build.
+    if (platform === 'darwin') {
+        const handExt = path.join(pythonSubDir, 'handobj', 'lib', 'model', '_C.cpython-310-darwin.so');
+        if (fs.existsSync(handExt)) {
+            try {
+                execSync(`xattr -cr "${handExt}"`);
+                execSync(`codesign --force --sign - "${handExt}"`);
+                console.log('Re-signed bundled HandObject native extension');
+            } catch (e) {
+                console.warn('Warning: could not re-sign HandObject _C.so:', e.message);
+            }
+        }
+    }
+
     // Use requirements from source tree
     const yoloRequirementsPath = path.join(__dirname, '..', 'python', 'requirements.txt');
     const retinafaceRequirementsPath = path.join(__dirname, '..', 'python', 'requirements-retinaface.txt');
+    const handRequirementsPath = path.join(__dirname, '..', 'python', 'requirements-hand.txt');
     
     console.log('Creating virtual environments with standalone Python...');
     
@@ -290,6 +309,28 @@ async function createVirtualEnvironments(pythonStandaloneDir) {
         });
     }
     
+    // Create Hand (HandObject) virtual environment (see comment above re: --copies)
+    console.log('Creating Hand virtual environment...');
+    execSync(`"${pythonExe}" -m venv "${handEnvDir}"`, { stdio: 'inherit' });
+
+    // Fix symlinks to be relative for relocatability
+    fixVenvPythonSymlinks(handEnvDir, pythonStandaloneDir);
+
+    const handPython = platform === 'win32'
+        ? path.join(handEnvDir, 'Scripts', 'python.exe')
+        : path.join(handEnvDir, 'bin', 'python');
+
+    execSync(`"${handPython}" -m pip install --no-cache-dir --upgrade pip setuptools wheel`, {
+        stdio: 'inherit',
+        env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1' }
+    });
+
+    console.log('Installing Hand dependencies...');
+    execSync(`"${handPython}" -m pip install --no-cache-dir -r "${handRequirementsPath}"`, {
+        stdio: 'inherit',
+        env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1' }
+    });
+
     // Create python-deps symlink for backwards compatibility
     const depsDir = path.join(pythonDistDir, 'python-deps');
     console.log('Creating python-deps symlink for backwards compatibility...');

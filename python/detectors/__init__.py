@@ -53,8 +53,10 @@ def DetectorFactory(key: str) -> Optional[Type[BaseDetector]]:
 
 
 def list_detectors() -> Dict[str, Dict[str, object]]:
-    """Return ``{key: {"name": ..., "variants": [...], "kind": "vision"|"audio"}}``
-    for every registered detector. Used by the IPC layer to populate the UI."""
+    """Return ``{key: {"name": ..., "mode": ..., "variants": [...], "kind": ...}}``
+    for every registered detector. ``mode`` is the modality the UI groups/filters
+    on (falls back to ``name`` when a detector didn't set it explicitly). Used by
+    the IPC layer to populate the UI."""
     out: Dict[str, Dict[str, object]] = {}
     for key, cls in DETECTOR_FACTORY.items():
         if issubclass(cls, VisionDetector):
@@ -65,6 +67,7 @@ def list_detectors() -> Dict[str, Dict[str, object]]:
             kind = "unknown"
         out[key] = {
             "name": cls.name,
+            "mode": cls.mode or cls.name,
             "variants": list(cls.variants),
             "kind": kind,
         }

@@ -70,12 +70,18 @@ jobs:
         fi
         echo "Successfully created resources/icon.ico"
 
+    - name: Set up MSVC (to compile the HandObject native extension)
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
     - name: Build Python bundle
       run: npm run python-build
       env:
         RETINAFACE_PYTHON: ${{ env.RETINAFACE_PYTHON }}
         BUNDLED_PYTHON_310: ${{ env.BUNDLED_PYTHON_310 }}
         PIP_DISABLE_PIP_VERSION_CHECK: '1'
+        DISTUTILS_USE_SDK: '1'
 
     - name: Verify and test YOLO environment
       shell: bash
@@ -180,6 +186,37 @@ jobs:
 
         # Smoke test RetinaFace import and detect
         node scripts/verify-python-modules.js
+
+    - name: Verify and test Hand environment
+      shell: bash
+      env:
+        PYTHONIOENCODING: 'utf-8'
+      run: |
+        # On Windows, we use standalone Python (no venv), so python.exe is at root
+        HAND_PY="$(pwd)/pythondist/hand-env/python.exe"
+
+        "$HAND_PY" - <<'PY'
+        import os, sys
+        root = os.getcwd()
+        sys.path.insert(0, os.path.join(root, 'pythondist', 'python'))
+
+        import numpy, PIL, cv2, yaml, easydict, scipy, torch, torchvision
+        assert torch.__version__.startswith('2.11'), f"torch {torch.__version__} != 2.11.x"
+        print(f"OK: torch {torch.__version__}, torchvision {torchvision.__version__}")
+
+        # Importing the vendored package loads the native model._C extension.
+        import handobj.inference  # noqa: F401
+        from model.roi_layers import nms
+        b = torch.tensor([[0., 0., 10., 10.], [1., 1., 11., 11.]])
+        s = torch.tensor([0.9, 0.8])
+        keep = nms(b, s, 0.5)
+        print(f"OK: native _C extension nms -> {keep.tolist()}")
+
+        from detectors import list_detectors
+        d = list_detectors()
+        assert 'hand_handobj' in d, f"hand_handobj not registered: {list(d)}"
+        print(f"OK: hand detector registered: {d['hand_handobj']}")
+        PY
 
     - name: Verify Python modules
       run: npm run python-verify

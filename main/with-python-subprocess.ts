@@ -30,7 +30,9 @@ const detectModelType = (command: any): string => {
     // Check if this is a processing command with model selection
     if (command && command.type === 'start_processing' && command.data && command.data.model) {
         const model = command.data.model.toLowerCase();
-        return model.includes('retinaface') ? 'retinaface' : 'yolo';
+        if (model.includes('handobject')) return 'hand';
+        if (model.includes('retinaface')) return 'retinaface';
+        return 'yolo';
     }
     return currentModelType; // Keep current type if not specified
 };
@@ -88,6 +90,8 @@ const initializePython = async () => {
         const yoloVenvPython3 = isWindows ? "" : path.join(resourcesBase, PY_DIST_FOLDER, "yolo-env", venvBinDir, "python3");
         const retinafaceVenvPython = path.join(resourcesBase, PY_DIST_FOLDER, "retinaface-env", venvBinDir, pyName);
         const retinafaceVenvPython3 = isWindows ? "" : path.join(resourcesBase, PY_DIST_FOLDER, "retinaface-env", venvBinDir, "python3");
+        const handVenvPython = path.join(resourcesBase, PY_DIST_FOLDER, "hand-env", venvBinDir, pyName);
+        const handVenvPython3 = isWindows ? "" : path.join(resourcesBase, PY_DIST_FOLDER, "hand-env", venvBinDir, "python3");
         const subprocessScriptPath = path.join(resourcesBase, PY_DIST_FOLDER, "python", "subprocess_api.py");
 
         // On Windows, yolo-env and retinaface-env are standalone Python copies with packages installed directly
@@ -101,7 +105,9 @@ const initializePython = async () => {
             };
             const chosen = currentModelType === 'retinaface'
                 ? pickExisting(retinafaceVenvPython)
-                : pickExisting(yoloVenvPython);
+                : currentModelType === 'hand'
+                    ? pickExisting(handVenvPython)
+                    : pickExisting(yoloVenvPython);
 
             if (chosen) {
                 pythonPath = chosen;
@@ -123,7 +129,7 @@ const initializePython = async () => {
                 scriptPath = multiEnvLauncherPath;
                 try { console.log(`Using bundled standalone Python: ${pythonPath}`); } catch (e) {}
                 try { console.log("With multi-environment launcher"); } catch (e) {}
-            } else if (fs.existsSync(retinafaceVenvPython) || (retinafaceVenvPython3 && fs.existsSync(retinafaceVenvPython3)) || fs.existsSync(yoloVenvPython) || (yoloVenvPython3 && fs.existsSync(yoloVenvPython3))) {
+            } else if (fs.existsSync(retinafaceVenvPython) || (retinafaceVenvPython3 && fs.existsSync(retinafaceVenvPython3)) || fs.existsSync(yoloVenvPython) || (yoloVenvPython3 && fs.existsSync(yoloVenvPython3)) || fs.existsSync(handVenvPython) || (handVenvPython3 && fs.existsSync(handVenvPython3))) {
                 // Fallback: use venv interpreters directly only if standalone missing
                 const pickExisting = (...candidates: string[]): string | "" => {
                     for (const c of candidates) { if (c && fs.existsSync(c)) return c; }
@@ -131,7 +137,9 @@ const initializePython = async () => {
                 };
                 const chosen = currentModelType === 'retinaface'
                     ? pickExisting(retinafaceVenvPython, retinafaceVenvPython3)
-                    : pickExisting(yoloVenvPython, yoloVenvPython3);
+                    : currentModelType === 'hand'
+                        ? pickExisting(handVenvPython, handVenvPython3)
+                        : pickExisting(yoloVenvPython, yoloVenvPython3);
                 if (chosen) {
                     pythonPath = chosen;
                     scriptPath = subprocessScriptPath;
@@ -166,6 +174,11 @@ const initializePython = async () => {
                 retinaVenvPath = path.join(projectDir, "retinaface-env", venvBinDir, pyName);
             }
 
+            let handVenvPath = path.join(projectDir, "hand-env", pyName);
+            if (isWindows && !fs.existsSync(handVenvPath)) {
+                handVenvPath = path.join(projectDir, "hand-env", venvBinDir, pyName);
+            }
+
             // Check for conda environments in common locations (OS-specific ordering)
             const possibleCondaPaths = (isWindows
                 ? [
@@ -188,6 +201,9 @@ const initializePython = async () => {
             if (currentModelType === 'retinaface' && fs.existsSync(retinaVenvPath)) {
                 pythonPath = retinaVenvPath;
                 try { console.log(`Using project RetinaFace virtual environment: ${pythonPath}`); } catch (e) {}
+            } else if (currentModelType === 'hand' && fs.existsSync(handVenvPath)) {
+                pythonPath = handVenvPath;
+                try { console.log(`Using project Hand virtual environment: ${pythonPath}`); } catch (e) {}
             } else if (currentModelType === 'yolo' && fs.existsSync(yoloVenvPath)) {
                 pythonPath = yoloVenvPath;
                 try { console.log(`Using project YOLO virtual environment: ${pythonPath}`); } catch (e) {}
@@ -220,6 +236,12 @@ const initializePython = async () => {
                             path.join(condaBasePath, "electron-python-retinaface", "Scripts", "python.exe"),
                           )
                         : path.join(condaBasePath, "electron-python-retinaface", "bin", "python");
+                    const handEnvPath = isWindows
+                        ? pickExisting(
+                            path.join(condaBasePath, "electron-python-hand", "python.exe"),
+                            path.join(condaBasePath, "electron-python-hand", "Scripts", "python.exe"),
+                          )
+                        : path.join(condaBasePath, "electron-python-hand", "bin", "python");
                     const fallbackPath = isWindows
                         ? pickExisting(
                             path.join(condaBasePath, "electron-python-sample", "python.exe"),
@@ -230,6 +252,9 @@ const initializePython = async () => {
                     if (currentModelType === 'retinaface' && retinaEnvPath && fs.existsSync(retinaEnvPath)) {
                         pythonPath = retinaEnvPath;
                         try { console.log(`Using RetinaFace conda environment: ${pythonPath}`); } catch (e) {}
+                    } else if (currentModelType === 'hand' && handEnvPath && fs.existsSync(handEnvPath)) {
+                        pythonPath = handEnvPath;
+                        try { console.log(`Using Hand conda environment: ${pythonPath}`); } catch (e) {}
                     } else if (currentModelType === 'yolo' && yoloEnvPath && fs.existsSync(yoloEnvPath)) {
                         pythonPath = yoloEnvPath;
                         try { console.log(`Using YOLO conda environment: ${pythonPath}`); } catch (e) {}

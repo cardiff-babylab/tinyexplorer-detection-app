@@ -30,6 +30,7 @@ class FaceRetinaFaceDetector(VisionDetector):
     """RetinaFace face detector. Single variant; the library manages weights."""
 
     name = "face"
+    mode = "face"
     variants = ["RetinaFace"]
 
     def load(self, weights_dir: str, variant: Optional[str] = None) -> bool:

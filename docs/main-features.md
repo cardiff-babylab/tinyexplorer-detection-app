@@ -20,6 +20,7 @@ The app automatically downloads required model weights when needed.
 ### Model Sources
 - YOLO face weights: [cardiff-babylab/tinyexplorer-detection-app releases](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models) (originally from [akanametov/yolo-face](https://github.com/akanametov/yolo-face))
 - RetinaFace implementation: [serengil/retinaface](https://github.com/serengil/retinaface)
+- Hand detection weights: [cardiff-babylab/tinyexplorer-detection-app releases](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/handobj-weights-v1) (HandObject / 100DOH Faster R‑CNN, originally from [ddshan/hand_object_detector](https://github.com/ddshan/hand_object_detector))
 
 ## Sampling Rate
 - Current sampling rate of 1 frame per second (1fps)

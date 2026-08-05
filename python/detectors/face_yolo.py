@@ -16,7 +16,6 @@ import os
 from typing import List, Optional
 
 import numpy as np
-import requests
 
 from .base import Detection, VisionDetector, register_detector
 
@@ -51,6 +50,7 @@ class FaceYoloDetector(VisionDetector):
     """YOLO face detector. Variant names are .pt filenames."""
 
     name = "face"
+    mode = "face"
     variants = list(_FACE_WEIGHT_URLS.keys())
 
     def __init__(self, progress_callback=None) -> None:
@@ -137,6 +137,8 @@ class FaceYoloDetector(VisionDetector):
         url = _FACE_WEIGHT_URLS[variant]
         self._emit(f"Downloading {variant} from GitHub...")
         try:
+            import requests  # lazy: only needed when actually downloading YOLO weights
+
             response = requests.get(url, stream=True, timeout=30)
             response.raise_for_status()
             total = int(response.headers.get("content-length", 0))

@@ -149,7 +149,8 @@ class SubprocessAPI:
             elif cmd_type == 'get_models':
                 try:
                     models = self.face_processor.get_available_models()
-                    return {'status': 'success', 'models': models}
+                    model_modes = self.face_processor.get_available_model_modes()
+                    return {'status': 'success', 'models': models, 'model_modes': model_modes}
                 except Exception as e:
                     return {'status': 'error', 'message': str(e)}
 
