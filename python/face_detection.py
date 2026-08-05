@@ -735,12 +735,13 @@ class FaceDetectionProcessor:
         Schema mirrors the 100DOH prototype export — ``dataset, filename,
         hand_id, hand_x1, hand_y1, hand_x2, hand_y2, Hand_confidence, state,
         Hand_side, Owner_label, paired_obj_id, obj_x1, obj_y1, obj_x2, obj_y2,
-        obj_score`` — plus two convenience columns kept from the app:
-        ``frame_idx`` (empty for image inputs) and ``state_label``.
+        obj_score`` — plus app convenience columns: ``frame_idx`` (empty for
+        image inputs), ``state_raw`` and ``state_label``.
 
-        The object columns are always empty in this build: it is hands-only (no
-        object detection or hand-object pairing), so ``paired_obj_id`` is ``-1``
-        and the ``obj_*`` cells are blank, matching the reference output.
+        ``state`` is the contact state AFTER hand-object pairing correction (this
+        is what matches the reference); ``state_raw`` is the model's uncorrected
+        argmax. The ``obj_*`` cells are blank and ``paired_obj_id`` is ``-1`` for
+        hands not paired with any object.
         """
         try:
             headers = [
@@ -748,8 +749,12 @@ class FaceDetectionProcessor:
                 "hand_x1", "hand_y1", "hand_x2", "hand_y2", "Hand_confidence",
                 "state", "Hand_side", "Owner_label",
                 "paired_obj_id", "obj_x1", "obj_y1", "obj_x2", "obj_y2", "obj_score",
-                "frame_idx", "state_label",
+                "frame_idx", "state_raw", "state_label",
             ]
+            def _blank(v):
+                # unpaired hands carry None for the obj_* fields -> empty cell
+                return "" if v is None else v
+
             rows = []
             for det in results:
                 if det.get("_no_face") or det.get("x") is None:
@@ -766,8 +771,12 @@ class FaceDetectionProcessor:
                     det.get("state", ""),
                     det.get("side", ""),
                     det.get("owner", ""),
-                    -1, "", "", "", "", "",   # paired_obj_id=-1, obj_* blank (hands-only)
+                    det.get("paired_obj_id", -1),
+                    _blank(det.get("obj_x1")), _blank(det.get("obj_y1")),
+                    _blank(det.get("obj_x2")), _blank(det.get("obj_y2")),
+                    _blank(det.get("obj_score")),
                     "" if frame_idx is None else frame_idx,
+                    det.get("state_raw", ""),
                     det.get("state_label", ""),
                 ])
 

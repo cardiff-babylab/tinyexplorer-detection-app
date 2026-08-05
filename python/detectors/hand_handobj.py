@@ -223,9 +223,16 @@ class HandObjectDetector(VisionDetector):
                     extra={
                         "hand_id": hand_id,
                         "state": h.state,
+                        "state_raw": h.state_raw,
                         "state_label": h.state_label,
                         "side": h.side,
                         "owner": h.owner,
+                        "paired_obj_id": h.paired_obj_id,
+                        "obj_x1": h.obj_x1,
+                        "obj_y1": h.obj_y1,
+                        "obj_x2": h.obj_x2,
+                        "obj_y2": h.obj_y2,
+                        "obj_score": h.obj_score,
                     },
                 )
             )
