@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./App.css";
 
 const ipcRenderer = (window as any).isInElectronRenderer
@@ -276,17 +276,10 @@ const App = () => {
         };
     }, [availableModels.length, loadAvailableModels, loadDetectorRegistry, handleCompletionEvent, checkPythonStatus]);
 
-    // Once the registry loads, snap selectedMode to whatever modality the
-    // currently-selected model belongs to (e.g. "RetinaFace" → "face").
-    useEffect(() => {
-        if (Object.keys(detectorRegistry).length === 0) return;
-        for (const info of Object.values(detectorRegistry)) {
-            if (info.variants.includes(selectedModel) && info.name !== selectedMode) {
-                setSelectedMode(info.name);
-                break;
-            }
-        }
-    }, [detectorRegistry, selectedModel, selectedMode]);
+    // Mode ↔ model alignment is handled by a one-time effect (see below,
+    // `didAlignModeRef`) plus handleModeChange. We intentionally do NOT keep a
+    // model→mode sync effect here: it would fight explicit Mode clicks (snapping
+    // the mode back whenever the target mode had no matching selected model).
 
     const handleSelectResultsFolder = () => {
         console.log("Prompting user to select results folder");
@@ -435,12 +428,20 @@ const App = () => {
     // belonging to that mode (and recompute confidence default for it).
     const handleModeChange = (newMode: string) => {
         setSelectedMode(newMode);
+        // Keep the Model widget in sync with the Mode: switch to this mode's first
+        // available variant. If the mode has no available models, clear the
+        // selection so the dropdown shows its empty state rather than a stale
+        // model from the previous mode.
         const firstVariantForMode = Object.values(detectorRegistry)
             .filter(info => info.name === newMode)
             .flatMap(info => info.variants)
             .find(v => availableModels.includes(v));
-        if (firstVariantForMode && firstVariantForMode !== selectedModel) {
-            handleModelChange(firstVariantForMode);
+        if (firstVariantForMode) {
+            if (firstVariantForMode !== selectedModel) {
+                handleModelChange(firstVariantForMode);
+            }
+        } else {
+            setSelectedModel("");
         }
     };
 
@@ -471,6 +472,33 @@ const App = () => {
             setConfidenceThreshold(0.5);
         }
     };
+
+    // One-time alignment: once models + registry have loaded, land on a Mode +
+    // Model that is actually available (e.g. if only Hand models are installed,
+    // start on Hand rather than an unavailable Face default). Guarded by a ref so
+    // it runs once and never fights an explicit Mode switch.
+    const didAlignModeRef = useRef(false);
+    useEffect(() => {
+        if (didAlignModeRef.current) return;
+        if (availableModels.length === 0 || Object.keys(detectorRegistry).length === 0) return;
+        didAlignModeRef.current = true;
+
+        const ownerOf = (variant: string) =>
+            Object.values(detectorRegistry).find(info => info.variants.includes(variant));
+
+        if (availableModels.includes(selectedModel)) {
+            // Current model is valid; just make sure the Mode matches it.
+            const owner = ownerOf(selectedModel);
+            if (owner && owner.name !== selectedMode) setSelectedMode(owner.name);
+        } else {
+            // Default model isn't available — pick the first available one and
+            // switch the Mode to its modality.
+            const firstAvailable = availableModels[0];
+            const owner = ownerOf(firstAvailable);
+            if (owner) setSelectedMode(owner.name);
+            if (firstAvailable) handleModelChange(firstAvailable);
+        }
+    }, [availableModels, detectorRegistry, selectedModel, selectedMode, handleModelChange]);
 
     const handleStartProcessing = async () => {
         console.log("User clicked 'Start Detection' button");
@@ -646,8 +674,18 @@ const App = () => {
                             onChange={(e) => handleModelChange(e.target.value)}
                             className="model-select"
                         >
-                            {Object.keys(detectorRegistry).length > 0 ? (
-                                Object.entries(detectorRegistry)
+                            {(() => {
+                                // No registry yet: fall back to a flat list.
+                                if (Object.keys(detectorRegistry).length === 0) {
+                                    return availableModels.map(model => (
+                                        <option key={model} value={model}>
+                                            {getDisplayName(model)}
+                                        </option>
+                                    ));
+                                }
+                                // Show only the selected Mode's detectors that have
+                                // an available model.
+                                const groups = Object.entries(detectorRegistry)
                                     .filter(([, info]) => info.name === selectedMode)
                                     .map(([key, info]) => {
                                         const variants = info.variants.filter(v => availableModels.includes(v));
@@ -665,13 +703,16 @@ const App = () => {
                                             </optgroup>
                                         );
                                     })
-                            ) : (
-                                availableModels.map(model => (
-                                    <option key={model} value={model}>
-                                        {getDisplayName(model)}
-                                    </option>
-                                ))
-                            )}
+                                    .filter(Boolean);
+                                if (groups.length === 0) {
+                                    return (
+                                        <option value="" disabled>
+                                            No models available for this mode
+                                        </option>
+                                    );
+                                }
+                                return groups;
+                            })()}
                         </select>
                     </div>
 
