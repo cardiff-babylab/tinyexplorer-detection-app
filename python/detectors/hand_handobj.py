@@ -18,10 +18,10 @@ detector (it just reports itself unavailable).
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import logging
 import os
 import shutil
-import sys
 import urllib.request
 from dataclasses import dataclass
 from typing import Dict, List, Optional
@@ -33,13 +33,12 @@ from .base import Detection, VisionDetector, register_detector
 logger = logging.getLogger(__name__)
 
 # Cheap availability probe: is torch importable at all in this environment?
-_TORCH_AVAILABLE = False
-try:
-    import torch  # noqa: F401
-
-    _TORCH_AVAILABLE = True
-except Exception as e:  # pragma: no cover - env dependent
-    print(f"HandObject detector: torch not available ({e})", file=sys.stderr)
+# Use find_spec so we do NOT import torch at module-load time — importing it is
+# the multi-second cold-start cost the lazy-load design avoids, and doing it here
+# would block the subprocess "ready" signal on every launch. The real import
+# happens later inside load() (via handobj.inference). Mirrors the import-free
+# probe in face_yolo/face_retinaface.
+_TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 
 # Base URL the checkpoints are downloaded from on first use. Points at the
