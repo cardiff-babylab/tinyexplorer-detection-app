@@ -48,6 +48,7 @@ The app automatically downloads required model weights when needed.
 ### Model Sources
 - YOLO face weights: https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models (originally from https://github.com/akanametov/yolo-face)
 - RetinaFace implementation: https://github.com/serengil/retinaface
+- Hand detection weights: https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/handobj-weights-v1 (HandObject / 100DOH Faster R‑CNN, originally from https://github.com/ddshan/hand_object_detector)
   
 ## Value for Developmental Psychologists
 

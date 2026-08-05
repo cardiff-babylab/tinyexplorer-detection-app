@@ -42,8 +42,10 @@ except Exception as e:  # pragma: no cover - env dependent
     print(f"HandObject detector: torch not available ({e})", file=sys.stderr)
 
 
-# Base URL the checkpoints are downloaded from on first use. Override with the
-# HANDOBJ_WEIGHTS_BASE_URL env var. TODO: point at the final hosted release.
+# Base URL the checkpoints are downloaded from on first use. Points at the
+# project's own GitHub Release so the weights are self-hosted (mirrors the YOLO
+# face weights in face_yolo.py). Override with the HANDOBJ_WEIGHTS_BASE_URL env
+# var for local mirrors or testing.
 _DEFAULT_WEIGHTS_BASE_URL = (
     "https://github.com/cardiff-babylab/tinyexplorer-detection-app/"
     "releases/download/handobj-weights-v1"
@@ -54,16 +56,21 @@ _DEFAULT_WEIGHTS_BASE_URL = (
 class _VariantSpec:
     filename: str
     has_ownership: bool
-    sha256: Optional[str] = None  # optional integrity check once weights are hosted
+    sha256: Optional[str] = None  # if set, downloaded weights are verified against it
 
 
-# variant name -> checkpoint spec
+# variant name -> checkpoint spec. sha256 values are of the assets hosted on the
+# handobj-weights-v1 GitHub Release; downloads are verified against them.
 _VARIANTS: Dict[str, _VariantSpec] = {
     "HandObject-Tuned": _VariantSpec(
-        filename="faster_rcnn_1_15_2739.pth", has_ownership=True
+        filename="faster_rcnn_1_15_2739.pth",
+        has_ownership=True,
+        sha256="56c4aa5dc973eb28b9d07266fcb0aaff8f96f9e9ca9afe7c3b85034513093d13",
     ),
     "HandObject-Baseline": _VariantSpec(
-        filename="faster_rcnn_1_8_132028.pth", has_ownership=False
+        filename="faster_rcnn_1_8_132028.pth",
+        has_ownership=False,
+        sha256="3444e3b992417cb6adfcd71539ca8c92602c21a3e2fdfff4628dbdbdf8a2dd03",
     ),
 }
 
