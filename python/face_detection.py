@@ -301,7 +301,8 @@ class FaceDetectionProcessor:
             if save_results and result_folder and self.results:
                 if self._active_modality() == "hand":
                     csv_path = os.path.join(result_folder, "hand_detections.csv")
-                    self.export_hand_results_to_csv(self.results, csv_path)
+                    dataset = os.path.basename(os.path.normpath(folder_path))
+                    self.export_hand_results_to_csv(self.results, csv_path, dataset=dataset)
                     summary_csv_path = os.path.join(result_folder, "hand_summary.csv")
                     self.export_hand_summary_to_csv(
                         image_files, video_files, summary_csv_path
@@ -726,39 +727,48 @@ class FaceDetectionProcessor:
 
     # ---- Hand-specific CSV export -----------------------------------------
 
-    def export_hand_results_to_csv(self, results: List[Dict], output_path: str) -> bool:
+    def export_hand_results_to_csv(
+        self, results: List[Dict], output_path: str, dataset: str = ""
+    ) -> bool:
         """Write one row per detected hand.
 
-        Schema: ``id, frame_idx, filename, hand_id, hand_x1, hand_y1, hand_x2,
-        hand_y2, hand_confidence, state, state_label, hand_side, owner``.
-        ``frame_idx`` is empty for image inputs.
+        Schema mirrors the 100DOH prototype export — ``dataset, filename,
+        hand_id, hand_x1, hand_y1, hand_x2, hand_y2, Hand_confidence, state,
+        Hand_side, Owner_label, paired_obj_id, obj_x1, obj_y1, obj_x2, obj_y2,
+        obj_score`` — plus two convenience columns kept from the app:
+        ``frame_idx`` (empty for image inputs) and ``state_label``.
+
+        The object columns are always empty in this build: it is hands-only (no
+        object detection or hand-object pairing), so ``paired_obj_id`` is ``-1``
+        and the ``obj_*`` cells are blank, matching the reference output.
         """
         try:
             headers = [
-                "id", "frame_idx", "filename", "hand_id",
-                "hand_x1", "hand_y1", "hand_x2", "hand_y2", "hand_confidence",
-                "state", "state_label", "hand_side", "owner",
+                "dataset", "filename", "hand_id",
+                "hand_x1", "hand_y1", "hand_x2", "hand_y2", "Hand_confidence",
+                "state", "Hand_side", "Owner_label",
+                "paired_obj_id", "obj_x1", "obj_y1", "obj_x2", "obj_y2", "obj_score",
+                "frame_idx", "state_label",
             ]
             rows = []
-            row_id = 0
             for det in results:
                 if det.get("_no_face") or det.get("x") is None:
                     continue
-                row_id += 1
                 x, y = det["x"], det["y"]
                 w, h = det["width"], det["height"]
                 frame_idx = det.get("frame_idx")
                 rows.append([
-                    row_id,
-                    "" if frame_idx is None else frame_idx,
+                    dataset,
                     os.path.basename(det["image_path"]),
                     det.get("hand_id", ""),
                     x, y, x + w, y + h,
                     det["confidence"],
                     det.get("state", ""),
-                    det.get("state_label", ""),
                     det.get("side", ""),
                     det.get("owner", ""),
+                    -1, "", "", "", "", "",   # paired_obj_id=-1, obj_* blank (hands-only)
+                    "" if frame_idx is None else frame_idx,
+                    det.get("state_label", ""),
                 ])
 
             with open(output_path, "w", newline="") as f:
