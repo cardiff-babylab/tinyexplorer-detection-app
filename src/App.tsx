@@ -36,6 +36,19 @@ const App = () => {
     // Live startup feedback for the loading screen: latest status line + elapsed time.
     const [startupStatus, setStartupStatus] = useState<string>("");
     const [startupElapsedMs, setStartupElapsedMs] = useState<number>(0);
+    // Notify-only "you're behind the latest release" banner. `updateInfo` is
+    // populated by a one-shot check against GitHub Releases (see main process);
+    // `updateBannerDismissed` hides it after the user closes it for that version.
+    type UpdateInfo = {
+        currentVersion: string;
+        latestVersion: string | null;
+        updateAvailable: boolean;
+        releaseUrl: string | null;
+        releaseName: string | null;
+        checked: boolean;
+    };
+    const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+    const [updateBannerDismissed, setUpdateBannerDismissed] = useState<boolean>(false);
 
     // Send command to Python via IPC
     const sendPythonCommand = useCallback((command: any): Promise<any> => {
@@ -184,6 +197,48 @@ const App = () => {
                 break;
         }
     }, [fetchResults]);
+
+    // One-shot, notify-only update check against GitHub Releases. The main
+    // process does the network call and fails silently (offline/error -> no
+    // banner); here we just store the result and honour a per-version dismissal
+    // so the banner returns only when a newer release lands.
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                if (!ipcRenderer || typeof ipcRenderer.invoke !== "function") return;
+                const info: UpdateInfo = await ipcRenderer.invoke("check-for-updates");
+                if (cancelled || !info) return;
+                setUpdateInfo(info);
+                if (info.updateAvailable && info.latestVersion) {
+                    const dismissedFor = window.localStorage.getItem("updateBannerDismissedVersion");
+                    if (dismissedFor === info.latestVersion) {
+                        setUpdateBannerDismissed(true);
+                    }
+                } else if (!info.checked) {
+                    console.warn("[FALLBACK] Update check did not complete (offline or GitHub unreachable); update banner suppressed.");
+                }
+            } catch (error) {
+                console.warn("[FALLBACK] Update check threw; update banner suppressed:", error);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Open the release page in the user's default browser (main process guards to https).
+    const handleOpenRelease = useCallback(() => {
+        if (updateInfo && updateInfo.releaseUrl && ipcRenderer && typeof ipcRenderer.invoke === "function") {
+            ipcRenderer.invoke("open-external", updateInfo.releaseUrl);
+        }
+    }, [updateInfo]);
+
+    // Hide the banner and remember the dismissal for this specific latest version.
+    const handleDismissUpdateBanner = useCallback(() => {
+        if (updateInfo && updateInfo.latestVersion) {
+            window.localStorage.setItem("updateBannerDismissedVersion", updateInfo.latestVersion);
+        }
+        setUpdateBannerDismissed(true);
+    }, [updateInfo]);
 
     // Handle Python events
     useEffect(() => {
@@ -577,6 +632,28 @@ const App = () => {
 
     return (
         <div className="App">
+            {updateInfo && updateInfo.updateAvailable && !updateBannerDismissed && (
+                <div className="update-banner" role="status">
+                    <span className="update-banner-text">
+                        <span className="update-banner-icon" role="img" aria-label="Update available">⬆️</span>
+                        A new version (v{updateInfo.latestVersion}) is available — you're on v{updateInfo.currentVersion}.
+                    </span>
+                    <span className="update-banner-actions">
+                        <button type="button" className="update-banner-link" onClick={handleOpenRelease}>
+                            View release
+                        </button>
+                        <button
+                            type="button"
+                            className="update-banner-dismiss"
+                            onClick={handleDismissUpdateBanner}
+                            aria-label="Dismiss update notification"
+                            title="Dismiss"
+                        >
+                            ✕
+                        </button>
+                    </span>
+                </div>
+            )}
             <div className="app-container">
                 <div className="left-panel">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
