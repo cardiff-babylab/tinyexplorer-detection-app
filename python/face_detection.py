@@ -357,10 +357,10 @@ class FaceDetectionProcessor:
             return None
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         if results_folder:
-            result_folder = os.path.join(results_folder, f"face_detection_results_{timestamp}")
+            result_folder = os.path.join(results_folder, f"detection_results_{timestamp}")
             self._emit(f"{_STATUS_SYMBOLS['folder']} Creating results folder: {result_folder}")
         else:
-            result_folder = os.path.join(os.getcwd(), f"face_detection_results_{timestamp}")
+            result_folder = os.path.join(os.getcwd(), f"detection_results_{timestamp}")
             self._emit(
                 f"{_STATUS_SYMBOLS['folder']} Creating default results folder: {result_folder}"
             )

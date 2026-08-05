@@ -58,6 +58,26 @@
                     removeListener: function(channel, callback) {
                         delete this.callbacks[channel];
                     },
+                    invoke: function(channel, data) {
+                        // Web/dev mode: no Electron main process. Resolve update
+                        // checks to "not checked / no update" so no banner shows,
+                        // and open external links in a new tab.
+                        if (channel === "check-for-updates") {
+                            return Promise.resolve({
+                                currentVersion: "dev",
+                                latestVersion: null,
+                                updateAvailable: false,
+                                releaseUrl: null,
+                                releaseName: null,
+                                checked: false
+                            });
+                        }
+                        if (channel === "open-external") {
+                            if (typeof data === "string") window.open(data, "_blank");
+                            return Promise.resolve(true);
+                        }
+                        return Promise.resolve(null);
+                    },
                     send: function(channel, data) {
                         console.log("IPC stub send:", channel, data === undefined ? "" : data);
                         
