@@ -17,7 +17,7 @@ import logging
 import os
 import sys
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -40,9 +40,10 @@ from model.utils.config import cfg, cfg_from_file  # noqa: E402
 
 _CFG_FILE = os.path.join(_THIS_DIR, "cfgs", "res101.yml")
 
-# Detection classes for the model; index 2 == "hand".
+# Detection classes for the model; index 1 == "targetobject", 2 == "hand".
 _PASCAL_CLASSES = np.asarray(["__background__", "targetobject", "hand"])
 _HAND_CLASS_IDX = 2
+_OBJ_CLASS_IDX = 1
 
 # Contact-state code -> human label (matches the prototype's frame summary).
 STATE_LABELS: Dict[int, str] = {
@@ -58,20 +59,115 @@ OWN_IF_PROB = 0.5
 # At most this many hands may be labelled "own" per frame (prototype rule).
 MAX_OWN_PER_FRAME = 2
 
+# Hand-object pairing (from the prototype). Each hand predicts a link vector
+# (magnitude + unit offset); projecting the hand centre along it lands near the
+# contacted object, and we pair with the nearest object centre within a radius.
+_OBJ_SCORE_THRESH = 0.5          # prototype CLI ObjectThresh default
+_PAIR_SCALE = 10000              # link-vector magnitude is normalised; scale back up
+_PAIR_MAX_DIST_SQ = 250 ** 2     # max squared px distance to accept a pairing
+# A "no-contact" hand paired with a nearby object is either un-paired (if the
+# model is very sure it's no-contact) or bumped to its next-most-likely state.
+_NO_TOUCH_CONF_THRESH = 0.95
+
 
 @dataclass
 class HandDetection:
-    """One hand detection in original-image pixel coordinates (x1,y1,x2,y2)."""
+    """One hand detection in original-image pixel coordinates (x1,y1,x2,y2).
+
+    Object fields describe the ``targetobject`` this hand was paired with (100DOH
+    hand-object association); ``paired_obj_id`` is ``-1`` and the ``obj_*`` fields
+    are ``None`` when the hand is not paired with any object.
+    """
 
     x1: float
     y1: float
     x2: float
     y2: float
     score: float
-    state: int
+    state: int  # contact state AFTER object-pairing correction (matches reference)
     state_label: str
     side: str  # "left" | "right"
     owner: str  # "own" | "other" | "unknown"
+    state_raw: int = -1  # model's raw contact-state argmax, before correction
+    paired_obj_id: int = -1
+    obj_x1: Optional[float] = None
+    obj_y1: Optional[float] = None
+    obj_x2: Optional[float] = None
+    obj_y2: Optional[float] = None
+    obj_score: Optional[float] = None
+
+
+def _centre_of(box) -> np.ndarray:
+    """Centre (cx, cy) of an ``[x1, y1, x2, y2, ...]`` box."""
+    x1, y1, x2, y2 = box[:4]
+    return np.array([(x1 + x2) / 2.0, (y1 + y2) / 2.0], dtype=np.float32)
+
+
+def _pair_hands_to_objects(
+    hand_dets: Optional[np.ndarray],
+    obj_dets: Optional[np.ndarray],
+    scale: int = _PAIR_SCALE,
+    max_dist_sq: float = _PAIR_MAX_DIST_SQ,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Pair each hand with the object nearest its predicted interaction point.
+
+    Returns ``(paired_ids, dist_sq)`` — ``paired_ids[h]`` is the row index into
+    ``obj_dets`` for hand ``h`` (or ``-1`` if none within ``max_dist_sq``).
+    Ported from the prototype's ``GetHandObjectPairs``.
+    """
+    n = 0 if hand_dets is None else hand_dets.shape[0]
+    paired = -np.ones((n,), dtype=np.int32)
+    dist_sq = np.full((n,), np.nan, dtype=np.float32)
+    if n == 0 or obj_dets is None or obj_dets.shape[0] == 0:
+        return paired, dist_sq
+
+    obj_centres = np.stack([_centre_of(o) for o in obj_dets], axis=0)
+    for h in range(n):
+        hand_centre = _centre_of(hand_dets[h, :4])
+        mag = float(hand_dets[h, 6])
+        dx = float(hand_dets[h, 7])
+        dy = float(hand_dets[h, 8])
+        point = hand_centre + mag * scale * np.array([dx, dy], dtype=np.float32)
+        d2 = np.sum((obj_centres - point[None, :]) ** 2, axis=1)
+        j = int(np.argmin(d2))
+        if max_dist_sq is not None and d2[j] > max_dist_sq:
+            continue
+        paired[h] = j
+        dist_sq[h] = d2[j]
+    return paired, dist_sq
+
+
+def _reassign_no_touch(
+    hand_dets: Optional[np.ndarray],
+    paired_ids: Optional[np.ndarray],
+    pair_dists: Optional[np.ndarray],
+    no_touch_conf_thresh: float = _NO_TOUCH_CONF_THRESH,
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
+    """Reconcile a no-contact hand that has a nearby paired object.
+
+    If the model is very sure the hand is no-contact, drop the pairing;
+    otherwise bump the hand to its next-most-likely (non-no-contact) state.
+    Ported from the prototype's ``ReassignNoTouchUsingPairedObject``.
+    """
+    if hand_dets is None or hand_dets.shape[0] == 0 or paired_ids is None:
+        return hand_dets, paired_ids, pair_dists
+
+    hand_dets = hand_dets.copy()
+    paired_ids = paired_ids.copy()
+    if pair_dists is not None:
+        pair_dists = pair_dists.copy()
+
+    for hand in range(hand_dets.shape[0]):
+        if int(hand_dets[hand, 5]) != 0 or int(paired_ids[hand]) < 0:
+            continue
+        state_probs = hand_dets[hand, 11:16].astype(np.float32)
+        if float(state_probs[0]) >= no_touch_conf_thresh:
+            paired_ids[hand] = -1
+            if pair_dists is not None:
+                pair_dists[hand] = np.nan
+        else:
+            hand_dets[hand, 5] = int(np.argmax(state_probs[1:5]) + 1)
+    return hand_dets, paired_ids, pair_dists
 
 
 def _get_image_blob(im: np.ndarray):
@@ -161,8 +257,14 @@ class HandObjectModel:
         im_bgr: np.ndarray,
         thresh_hand: float = 0.5,
         own_prob_thresh: float = OWN_IF_PROB,
+        thresh_obj: float = _OBJ_SCORE_THRESH,
     ) -> List[HandDetection]:
-        """Detect hands in a single BGR image; returns a list of HandDetection."""
+        """Detect hands in a single BGR image; returns a list of HandDetection.
+
+        Objects (``targetobject``) are detected too and paired to hands so each
+        HandDetection carries its contacted object (or none). ``thresh_obj`` is
+        the object-detection confidence threshold used for that pairing.
+        """
         blobs, im_scales = _get_image_blob(im_bgr)
         assert len(im_scales) == 1, "Only single-scale testing is supported"
 
@@ -259,6 +361,32 @@ class HandObjectModel:
             dim=1,
         ).cpu().numpy()
 
+        # Raw contact state (argmax) before any object-pairing correction below.
+        raw_states = hand_dets[:, 5].astype(int).copy()
+
+        # Object detections (targetobject class), used for hand-object pairing;
+        # mirrors the hand extraction above.
+        obj_dets: Optional[np.ndarray] = None
+        oj = _OBJ_CLASS_IDX
+        obj_inds = torch.nonzero(scores_s[:, oj] > thresh_obj).view(-1)
+        if obj_inds.numel() > 0:
+            obj_scores = scores_s[:, oj][obj_inds]
+            _, oorder = torch.sort(obj_scores, 0, True)
+            obj_boxes_ordered = pred_s[obj_inds][:, oj * 4 : (oj + 1) * 4][oorder]
+            okeep = nms(obj_boxes_ordered, obj_scores[oorder], cfg.TEST.NMS).view(-1).long()
+            osel = obj_inds[oorder][okeep]
+            obj_dets = torch.cat(
+                (pred_s[osel][:, oj * 4 : (oj + 1) * 4], scores_s[osel, oj].unsqueeze(1)),
+                dim=1,
+            ).cpu().numpy()
+
+        # Pair hands to objects via the link vector, then correct no-contact
+        # states for hands that turn out to sit near a paired object.
+        paired_ids, pair_dists = _pair_hands_to_objects(hand_dets, obj_dets)
+        hand_dets, paired_ids, _pair_dists = _reassign_no_touch(
+            hand_dets, paired_ids, pair_dists
+        )
+
         if self.has_ownership:
             owner_is_own = _enforce_two_own_limit(hand_dets, own_prob_thresh)
         else:
@@ -275,6 +403,15 @@ class HandObjectModel:
                 owner = "own" if owner_is_own[hid] else "other"
             else:
                 owner = "unknown"
+
+            oid = int(paired_ids[hid]) if paired_ids is not None else -1
+            if obj_dets is not None and oid >= 0:
+                obj_x1, obj_y1, obj_x2, obj_y2 = (float(v) for v in obj_dets[oid][:4])
+                obj_score = float(obj_dets[oid][4])
+            else:
+                oid = -1
+                obj_x1 = obj_y1 = obj_x2 = obj_y2 = obj_score = None
+
             results.append(
                 HandDetection(
                     x1=x1,
@@ -286,6 +423,13 @@ class HandObjectModel:
                     state_label=STATE_LABELS.get(state, f"state{state}"),
                     side=side,
                     owner=owner,
+                    state_raw=int(raw_states[hid]),
+                    paired_obj_id=oid,
+                    obj_x1=obj_x1,
+                    obj_y1=obj_y1,
+                    obj_x2=obj_x2,
+                    obj_y2=obj_y2,
+                    obj_score=obj_score,
                 )
             )
         return results
