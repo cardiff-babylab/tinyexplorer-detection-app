@@ -83,6 +83,11 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+# Vendored HandObject native extension — prebuilt binaries that MUST be committed
+# and shipped (mac-arm64 + win-x64, CPython 3.10). Re-include past the *.so/*.pyd rules above.
+!python/handobj/lib/model/_C.cpython-310-darwin.so
+!python/handobj/lib/model/_C.cp310-win_amd64.pyd
 env/
 venv/
 .venv/
