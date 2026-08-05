@@ -271,10 +271,20 @@ jobs:
           exit 1
         }
 
-    - name: Upload Windows artifacts
+    # Upload the two installers as separate artifacts so users download only the
+    # one they need (~750 MB each) instead of a single ~1.5 GB bundle.
+    - name: Upload Windows setup installer (NSIS)
       uses: actions/upload-artifact@v4
       with:
-        name: windows-build
+        name: windows-setup
+        path: dist/*-setup.exe
+        if-no-files-found: warn
+
+    - name: Upload Windows portable
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-portable
         path: |
           dist/*.exe
+          !dist/*-setup.exe
         if-no-files-found: warn
