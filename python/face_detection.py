@@ -864,14 +864,12 @@ class FaceDetectionProcessor:
 
     # ---- Available-model listing ------------------------------------------
 
-    def get_available_models(self) -> List[str]:
-        """Return the same list of selectable model names the UI used pre-refactor.
-
-        The list is filtered by which detector environments are reachable
-        (bundled venv, conda env, or active interpreter)."""
+    def _available_variants_with_mode(self) -> List[Tuple[str, str]]:
+        """Return ``[(variant, mode), ...]`` for every selectable model, filtered
+        by which detector environments are reachable (bundled venv, conda env, or
+        active interpreter). Single source of truth for the two public accessors
+        below so the flat list and the variant->mode map never disagree."""
         env_flags = _detect_environments()
-
-        models: List[str] = []
         any_bundled = (
             env_flags["any_yolo"]
             or env_flags["any_retinaface"]
@@ -884,26 +882,33 @@ class FaceDetectionProcessor:
                 f"Hand: {env_flags['any_hand']}",
                 file=sys.stderr,
             )
-            for key, info in list_detectors().items():
-                if info["kind"] != "vision":
-                    continue
-                if "yolo" in key and env_flags["any_yolo"]:
-                    models.extend(info["variants"])  # type: ignore[arg-type]
-                elif "retinaface" in key and env_flags["any_retinaface"]:
-                    models.extend(info["variants"])  # type: ignore[arg-type]
-                elif "hand" in key and env_flags["any_hand"]:
-                    models.extend(info["variants"])  # type: ignore[arg-type]
-        else:
-            for key, info in list_detectors().items():
-                if info["kind"] != "vision":
-                    continue
-                if "yolo" in key and _yolo_available():
-                    models.extend(info["variants"])  # type: ignore[arg-type]
-                elif "retinaface" in key and _retinaface_available():
-                    models.extend(info["variants"])  # type: ignore[arg-type]
-                elif "hand" in key and _handobj_available():
-                    models.extend(info["variants"])  # type: ignore[arg-type]
-        return models
+
+        def _reachable(key: str) -> bool:
+            if "yolo" in key:
+                return env_flags["any_yolo"] if any_bundled else _yolo_available()
+            if "retinaface" in key:
+                return env_flags["any_retinaface"] if any_bundled else _retinaface_available()
+            if "hand" in key:
+                return env_flags["any_hand"] if any_bundled else _handobj_available()
+            return False
+
+        out: List[Tuple[str, str]] = []
+        for key, info in list_detectors().items():
+            if info["kind"] != "vision" or not _reachable(key):
+                continue
+            mode = str(info.get("mode") or info["name"])
+            for variant in info["variants"]:  # type: ignore[union-attr]
+                out.append((variant, mode))
+        return out
+
+    def get_available_models(self) -> List[str]:
+        """Return the flat list of selectable model names the UI used pre-refactor."""
+        return [variant for variant, _ in self._available_variants_with_mode()]
+
+    def get_available_model_modes(self) -> Dict[str, str]:
+        """Return ``{variant: mode}`` for every selectable model, so the UI can
+        filter the model dropdown by the selected Mode without a second call."""
+        return {variant: mode for variant, mode in self._available_variants_with_mode()}
 
     # ---- Helpers -----------------------------------------------------------
 

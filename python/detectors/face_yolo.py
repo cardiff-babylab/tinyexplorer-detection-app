@@ -50,6 +50,7 @@ class FaceYoloDetector(VisionDetector):
     """YOLO face detector. Variant names are .pt filenames."""
 
     name = "face"
+    mode = "face"
     variants = list(_FACE_WEIGHT_URLS.keys())
 
     def __init__(self, progress_callback=None) -> None:

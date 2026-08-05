@@ -15,18 +15,28 @@ const App = () => {
     const [progressMessages, setProgressMessages] = useState<string[]>([]);
     const [hasProgressMessages, setHasProgressMessages] = useState(false);
     const [availableModels, setAvailableModels] = useState<string[]>([]);
-    type DetectorInfo = { name: string; variants: string[]; kind: string };
+    // variant -> mode ("face"/"hand"/...), returned by get_models. This is the
+    // reliable source the Model dropdown filters on: it travels with the model
+    // list itself, so filtering works even when the detector registry (a separate
+    // list_detectors call) is unavailable.
+    const [modelModes, setModelModes] = useState<Record<string, string>>({});
+    type DetectorInfo = { name: string; mode: string; variants: string[]; kind: string };
     const [detectorRegistry, setDetectorRegistry] = useState<Record<string, DetectorInfo>>({});
-    // Modalities surfaced in the UI. Hand and Speech are disabled placeholders
-    // until detectors for them land in python/detectors/. Flip the entry to
-    // `true` to enable; the rest of the UI (model dropdown, registry lookup) is
-    // already wired to handle them.
+    // Modalities the app knows about. `MODE_AVAILABILITY` gates whether a real
+    // detector exists (a disabled "coming soon" button is shown when `false`).
+    // `HIDDEN_MODES` keeps a mode fully wired but out of the UI — the rest of the
+    // pipeline (model dropdown, registry lookup, icons) still handles it, we just
+    // don't render its button yet. To surface a hidden mode, drop it from
+    // HIDDEN_MODES; to add a brand-new mode, append it to KNOWN_MODES too.
     const KNOWN_MODES: ReadonlyArray<string> = ["face", "hand", "speech"];
     const MODE_AVAILABILITY: Readonly<Record<string, boolean>> = {
         face: true,
         hand: true,
         speech: false,
     };
+    // Parked for now: speech detection is planned but not near-term, so keep the
+    // wiring and hide the button. Remove "speech" here to bring it back.
+    const HIDDEN_MODES: ReadonlySet<string> = new Set(["speech"]);
     const [selectedMode, setSelectedMode] = useState<string>("face");
     const [results, setResults] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
     const [resultsFolder, setResultsFolder] = useState("");
@@ -71,11 +81,17 @@ const App = () => {
         try {
             const response = await sendPythonCommand({ type: 'list_detectors' });
             console.log("list_detectors response:", response);
-            if (response.status === 'success' && response.detectors) {
+            if (response && response.status === 'success' && response.detectors) {
                 setDetectorRegistry(response.detectors);
+            } else {
+                console.warn(
+                    "[FALLBACK] loadDetectorRegistry: no usable detector registry in response — " +
+                    "Model dropdown will fall back to an ungrouped list that does NOT filter by Mode.",
+                    response,
+                );
             }
         } catch (error) {
-            console.warn("Could not load detector registry:", error);
+            console.warn("[FALLBACK] loadDetectorRegistry threw; Model dropdown will not filter by Mode:", error);
         }
     }, [sendPythonCommand]);
 
@@ -88,7 +104,11 @@ const App = () => {
             if (response.status === 'success') {
                 console.log("Available models loaded:", response.models);
                 setAvailableModels(response.models);
-                
+                // model_modes is the variant->mode map the dropdown filters on.
+                // Older backends may omit it; default to an empty map (the UI then
+                // falls back to the detector registry, then to an unfiltered list).
+                setModelModes(response.model_modes || {});
+
                 // Set RetinaFace as default if available, otherwise use best YOLO face model
                 if (response.models.includes("RetinaFace") && selectedModel === "RetinaFace") {
                     console.log("RetinaFace is available and already selected as default");
@@ -101,13 +121,23 @@ const App = () => {
                     console.log("RetinaFace not available, auto-selecting best YOLO face model: yolov8l-face.pt");
                     setSelectedModel("yolov8l-face.pt");
                     setConfidenceThreshold(0.7);
+                } else {
+                    console.warn(
+                        "[FALLBACK] loadAvailableModels: no default Face model available; " +
+                        "leaving the current selection. The one-time alignment effect will pick " +
+                        "the first available model.",
+                        response.models,
+                    );
                 }
             } else {
-                console.error("Failed to load models:", response.message);
+                console.warn(
+                    "[FALLBACK] loadAvailableModels: get_models did not succeed; using [\"RetinaFace\"] as a stand-in list.",
+                    response,
+                );
                 setAvailableModels(["RetinaFace"]); // Fallback
             }
         } catch (error) {
-            console.error("Error loading models:", error);
+            console.warn("[FALLBACK] loadAvailableModels threw; using [\"RetinaFace\"] as a stand-in list:", error);
             setAvailableModels(["RetinaFace"]); // Fallback
         }
     }, [sendPythonCommand, selectedModel]);
@@ -424,6 +454,17 @@ const App = () => {
         return null;
     };
 
+    // Modality ("face"/"hand"/...) for a variant. Prefers the model_modes map
+    // (travels with the model list, so it's present even when the detector
+    // registry isn't); falls back to the registry. Returns "" if unknown.
+    const modeOfVariant = (variant: string): string => {
+        if (modelModes[variant]) return modelModes[variant];
+        for (const info of Object.values(detectorRegistry)) {
+            if (info.variants.includes(variant)) return info.mode || info.name;
+        }
+        return "";
+    };
+
     // When a mode is picked, switch the model dropdown to the first variant
     // belonging to that mode (and recompute confidence default for it).
     const handleModeChange = (newMode: string) => {
@@ -432,15 +473,16 @@ const App = () => {
         // available variant. If the mode has no available models, clear the
         // selection so the dropdown shows its empty state rather than a stale
         // model from the previous mode.
-        const firstVariantForMode = Object.values(detectorRegistry)
-            .filter(info => info.name === newMode)
-            .flatMap(info => info.variants)
-            .find(v => availableModels.includes(v));
+        const firstVariantForMode = availableModels.find(v => modeOfVariant(v) === newMode);
         if (firstVariantForMode) {
             if (firstVariantForMode !== selectedModel) {
                 handleModelChange(firstVariantForMode);
             }
         } else {
+            console.warn(
+                `[FALLBACK] handleModeChange("${newMode}"): no available model for this mode ` +
+                `(available: ${availableModels.join(", ") || "none"}). Clearing model selection.`,
+            );
             setSelectedModel("");
         }
     };
@@ -480,25 +522,40 @@ const App = () => {
     const didAlignModeRef = useRef(false);
     useEffect(() => {
         if (didAlignModeRef.current) return;
-        if (availableModels.length === 0 || Object.keys(detectorRegistry).length === 0) return;
+        // Need models plus at least one source of modality info (model_modes or
+        // the registry) before we can align Mode to Model.
+        const haveModeInfo =
+            Object.keys(modelModes).length > 0 || Object.keys(detectorRegistry).length > 0;
+        if (availableModels.length === 0 || !haveModeInfo) return;
         didAlignModeRef.current = true;
-
-        const ownerOf = (variant: string) =>
-            Object.values(detectorRegistry).find(info => info.variants.includes(variant));
 
         if (availableModels.includes(selectedModel)) {
             // Current model is valid; just make sure the Mode matches it.
-            const owner = ownerOf(selectedModel);
-            if (owner && owner.name !== selectedMode) setSelectedMode(owner.name);
+            const mode = modeOfVariant(selectedModel);
+            if (mode && mode !== selectedMode) setSelectedMode(mode);
         } else {
             // Default model isn't available — pick the first available one and
             // switch the Mode to its modality.
             const firstAvailable = availableModels[0];
-            const owner = ownerOf(firstAvailable);
-            if (owner) setSelectedMode(owner.name);
+            const mode = modeOfVariant(firstAvailable);
+            if (mode) setSelectedMode(mode);
             if (firstAvailable) handleModelChange(firstAvailable);
         }
-    }, [availableModels, detectorRegistry, selectedModel, selectedMode, handleModelChange]);
+    }, [availableModels, detectorRegistry, modelModes, selectedModel, selectedMode, handleModelChange]);
+
+    // Warn only when we have models but NO modality info at all (neither the
+    // model_modes map nor the registry) — the one case where the dropdown can't
+    // filter by the selected Mode and falls back to an unfiltered list.
+    useEffect(() => {
+        const haveModeInfo =
+            Object.keys(modelModes).length > 0 || Object.keys(detectorRegistry).length > 0;
+        if (availableModels.length > 0 && !haveModeInfo) {
+            console.warn(
+                "[FALLBACK] Model dropdown: no modality info (model_modes + registry both empty) — " +
+                "rendering all available models unfiltered by the selected Mode.",
+            );
+        }
+    }, [availableModels, detectorRegistry, modelModes]);
 
     const handleStartProcessing = async () => {
         console.log("User clicked 'Start Detection' button");
@@ -591,7 +648,7 @@ const App = () => {
         return (
             <div className="loading-container">
                 <div className="loading-message">
-                    Starting up face detection engine...
+                    Starting up detection engine...
                 </div>
                 {startupStatus && (
                     <div className="loading-substatus">
@@ -641,7 +698,7 @@ const App = () => {
                     <div className="control-section">
                         <label>Select Mode:</label>
                         <div className="mode-selector">
-                            {KNOWN_MODES.map(mode => {
+                            {KNOWN_MODES.filter(mode => !HIDDEN_MODES.has(mode)).map(mode => {
                                 const hasDetector = MODE_AVAILABILITY[mode] === true;
                                 const disabled = !hasDetector;
                                 const modeLabel = mode.charAt(0).toUpperCase() + mode.slice(1);
@@ -675,43 +732,52 @@ const App = () => {
                             className="model-select"
                         >
                             {(() => {
-                                // No registry yet: fall back to a flat list.
-                                if (Object.keys(detectorRegistry).length === 0) {
-                                    return availableModels.map(model => (
+                                const noneForMode = (
+                                    <option value="" disabled>
+                                        No models available for this mode
+                                    </option>
+                                );
+                                // Preferred: registry present -> group by detector
+                                // (optgroups), filtered to the selected Mode.
+                                if (Object.keys(detectorRegistry).length > 0) {
+                                    const groups = Object.entries(detectorRegistry)
+                                        .filter(([, info]) => (info.mode || info.name) === selectedMode)
+                                        .map(([key, info]) => {
+                                            const variants = info.variants.filter(v => availableModels.includes(v));
+                                            if (variants.length === 0) return null;
+                                            return (
+                                                <optgroup
+                                                    key={key}
+                                                    label={formatBackendName(key)}
+                                                >
+                                                    {variants.map(model => (
+                                                        <option key={model} value={model}>
+                                                            {getDisplayName(model)}
+                                                        </option>
+                                                    ))}
+                                                </optgroup>
+                                            );
+                                        })
+                                        .filter(Boolean);
+                                    return groups.length === 0 ? noneForMode : groups;
+                                }
+                                // No registry, but model_modes is available:
+                                // ungrouped list filtered to the selected Mode.
+                                if (Object.keys(modelModes).length > 0) {
+                                    const forMode = availableModels.filter(m => modeOfVariant(m) === selectedMode);
+                                    if (forMode.length === 0) return noneForMode;
+                                    return forMode.map(model => (
                                         <option key={model} value={model}>
                                             {getDisplayName(model)}
                                         </option>
                                     ));
                                 }
-                                // Show only the selected Mode's detectors that have
-                                // an available model.
-                                const groups = Object.entries(detectorRegistry)
-                                    .filter(([, info]) => info.name === selectedMode)
-                                    .map(([key, info]) => {
-                                        const variants = info.variants.filter(v => availableModels.includes(v));
-                                        if (variants.length === 0) return null;
-                                        return (
-                                            <optgroup
-                                                key={key}
-                                                label={formatBackendName(key)}
-                                            >
-                                                {variants.map(model => (
-                                                    <option key={model} value={model}>
-                                                        {getDisplayName(model)}
-                                                    </option>
-                                                ))}
-                                            </optgroup>
-                                        );
-                                    })
-                                    .filter(Boolean);
-                                if (groups.length === 0) {
-                                    return (
-                                        <option value="" disabled>
-                                            No models available for this mode
-                                        </option>
-                                    );
-                                }
-                                return groups;
+                                // Last resort: no modality info at all -> unfiltered list.
+                                return availableModels.map(model => (
+                                    <option key={model} value={model}>
+                                        {getDisplayName(model)}
+                                    </option>
+                                ));
                             })()}
                         </select>
                     </div>

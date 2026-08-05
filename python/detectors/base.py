@@ -67,7 +67,13 @@ class Detection:
 class BaseDetector(ABC):
     """Common bits for vision and audio detectors."""
 
+    # ``name`` is the per-detection output label (also used as Detection.label).
+    # ``mode`` is the modality/UI grouping key ("face", "hand", "speech", ...);
+    # the Select Mode widget filters the model dropdown on it. It defaults to
+    # ``name`` (they coincide for the current detectors) but is a distinct field
+    # so a detector can label detections differently from its mode if needed.
     name: ClassVar[str] = ""
+    mode: ClassVar[str] = ""
     variants: ClassVar[List[str]] = []
 
     def __init__(self, progress_callback: ProgressCallback = None) -> None:

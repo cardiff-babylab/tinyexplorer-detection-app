@@ -80,6 +80,7 @@ class HandObjectDetector(VisionDetector):
     """Hand detector reporting bbox, contact state, side and (Tuned) ownership."""
 
     name = "hand"
+    mode = "hand"
     variants = ["HandObject-Tuned", "HandObject-Baseline"]
 
     def __init__(self, progress_callback=None) -> None:
