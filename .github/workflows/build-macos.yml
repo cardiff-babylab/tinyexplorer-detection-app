@@ -11,7 +11,7 @@ jobs:
   build:
     # Build only for Apple Silicon (ARM64)
     runs-on: macos-14
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     env:
       ARCH: arm64
@@ -147,6 +147,35 @@ jobs:
         
         # Smoke test RetinaFace import and detect
         node scripts/verify-python-modules.js
+
+    - name: Verify and test Hand environment
+      run: |
+        HAND_PY="$(pwd)/pythondist/hand-env/bin/python"
+
+        # Verify core Hand requirements + the vendored native extension load.
+        "$HAND_PY" - << 'PY'
+        import os, sys
+        root = os.getcwd()
+        sys.path.insert(0, os.path.join(root, 'pythondist', 'python'))
+
+        import numpy, PIL, cv2, yaml, easydict, scipy, torch, torchvision
+        assert torch.__version__.startswith('2.11'), f"torch {torch.__version__} != 2.11.x"
+        print(f"OK: torch {torch.__version__}, torchvision {torchvision.__version__}")
+
+        # Importing the vendored package loads the native model._C extension.
+        import handobj.inference  # noqa: F401
+        from model.roi_layers import nms
+        b = torch.tensor([[0., 0., 10., 10.], [1., 1., 11., 11.]])
+        s = torch.tensor([0.9, 0.8])
+        keep = nms(b, s, 0.5)
+        print(f"OK: native _C extension nms -> {keep.tolist()}")
+
+        # The hand detector must register (even before weights are present).
+        from detectors import list_detectors
+        d = list_detectors()
+        assert 'hand_handobj' in d, f"hand_handobj not registered: {list(d)}"
+        print(f"OK: hand detector registered: {d['hand_handobj']}")
+        PY
 
     - name: Verify Python modules
       run: npm run python-verify

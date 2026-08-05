@@ -24,7 +24,7 @@ const App = () => {
     const KNOWN_MODES: ReadonlyArray<string> = ["face", "hand", "speech"];
     const MODE_AVAILABILITY: Readonly<Record<string, boolean>> = {
         face: true,
-        hand: false,
+        hand: true,
         speech: false,
     };
     const [selectedMode, setSelectedMode] = useState<string>("face");
@@ -364,7 +364,14 @@ const App = () => {
         if (modelName === "RetinaFace") {
             return "RetinaFace";
         }
-        
+
+        // Hand detection models
+        if (modelName === "HandObject-Tuned") {
+            return "HandObject (TinyExplorer-tuned)";
+        } else if (modelName === "HandObject-Baseline") {
+            return "HandObject (100DOH baseline)";
+        }
+
         // Handle YOLO face models
         if (modelName.includes("yolov8n-face")) {
             return "YOLOv8 Nano (Face)";
@@ -444,6 +451,8 @@ const App = () => {
         // Set appropriate confidence thresholds based on model
         if (newModel === "RetinaFace") {
             setConfidenceThreshold(0.9);
+        } else if (newModel.includes("HandObject")) {
+            setConfidenceThreshold(0.55);
         } else if (newModel.includes("face")) {
             if (newModel.includes("yolov8n-face")) {
                 setConfidenceThreshold(0.3);

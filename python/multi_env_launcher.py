@@ -65,6 +65,8 @@ def setup_python_path(model_type='yolo'):
         # Determine the appropriate environment directory
         if model_type == 'retinaface':
             env_dir = os.path.join(parent_dir, 'retinaface-env')
+        elif model_type == 'hand':
+            env_dir = os.path.join(parent_dir, 'hand-env')
         else:
             env_dir = os.path.join(parent_dir, 'yolo-env')
 
@@ -160,6 +162,9 @@ def setup_python_path(model_type='yolo'):
         os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '2')
         _spec_report('tensorflow', 'TensorFlow')
         _spec_report('retinaface', 'RetinaFace')
+    elif model_type == 'hand':
+        _spec_report('torch', 'PyTorch')
+        _spec_report('torchvision', 'torchvision')
 
     # Common dependencies.
     _spec_report('cv2', 'OpenCV')

@@ -325,11 +325,13 @@ copyRecursiveSync(path.join(__dirname, '..', 'python'), pythonSubDir);
 // Install dependencies to both yolo-env and retinaface-env directories
 console.log('Installing Python dependencies to dual environments...');
 
-// Create both environment directories
+// Create environment directories (one per modality backend)
 const yoloEnvDir = path.join(pythonDistDir, 'yolo-env');
 const retinafaceEnvDir = path.join(pythonDistDir, 'retinaface-env');
+const handEnvDir = path.join(pythonDistDir, 'hand-env');
 fs.mkdirSync(yoloEnvDir, { recursive: true });
 fs.mkdirSync(retinafaceEnvDir, { recursive: true });
+fs.mkdirSync(handEnvDir, { recursive: true });
 
 // Use requirements from source tree
 const yoloRequirementsPath = path.join(__dirname, '..', 'python', 'requirements.txt');
@@ -508,6 +510,49 @@ async function setupEnvironments() {
             process.exit(1);
         }
         
+        // ---- Hand (HandObject) environment ----
+        // torch/torchvision are pinned to the ABI the vendored native _C extension
+        // was built against (2.11.0 / 0.26.0). Install them from the CPU wheel index
+        // for deterministic, CUDA-free builds; the rest come from PyPI.
+        console.log('Setting up Hand environment...');
+        try {
+            if (isWindows) {
+                console.log('Copying standalone Python to hand-env...');
+                const basePythonHand = await ensureBundledPython310();
+                copyRecursiveSync(path.dirname(basePythonHand), handEnvDir);
+            } else {
+                const pyForHand = await ensureBundledPython310();
+                console.log(`Using ${pyForHand} to create Hand virtual environment...`);
+                execSync(`"${pyForHand}" -m venv --copies "${handEnvDir}"`, { stdio: 'inherit' });
+            }
+
+            const handPython = isWindows
+                ? path.join(handEnvDir, 'python.exe')
+                : path.join(handEnvDir, 'bin', 'python');
+
+            execSync(`"${handPython}" -m pip install --no-cache-dir --upgrade pip setuptools wheel`, {
+                stdio: 'inherit',
+                env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1' }
+            });
+
+            console.log('Installing Hand PyTorch (CPU) ...');
+            execSync(`"${handPython}" -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.11.0 torchvision==0.26.0`, {
+                stdio: 'inherit',
+                env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1' }
+            });
+
+            console.log('Installing Hand remaining dependencies ...');
+            execSync(`"${handPython}" -m pip install --no-cache-dir numpy pillow opencv-python scipy pyyaml easydict tqdm`, {
+                stdio: 'inherit',
+                env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1' }
+            });
+
+            console.log('Hand environment created successfully!');
+        } catch (handError) {
+            console.error('Failed to create Hand environment:', handError.message);
+            process.exit(1);
+        }
+
         // Create python-deps symlink/copy for backwards compatibility
         const depsDir = path.join(pythonDistDir, 'python-deps');
         console.log('Creating python-deps for backwards compatibility...');

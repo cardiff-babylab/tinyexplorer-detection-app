@@ -1,0 +1,17 @@
+# HandObject hand detector environment (Python 3.10).
+#
+# torch/torchvision are PINNED: the vendored native extension
+# python/handobj/lib/model/_C.{cpython-310-darwin.so,cp310-win_amd64.pyd} was
+# built against torch 2.11 and fails at runtime on other torch ABIs
+# ("Undefined backend is not a valid device type"). Do not bump without
+# rebuilding _C for every shipped platform.
+torch==2.11.0
+torchvision==0.26.0
+
+numpy
+pillow
+opencv-python
+scipy
+pyyaml
+easydict
+tqdm
