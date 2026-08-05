@@ -33,6 +33,9 @@ const App = () => {
     const [completedResultsFolder, setCompletedResultsFolder] = useState("");
     const [isVideoFile, setIsVideoFile] = useState(false);
     const [pythonReady, setPythonReady] = useState(false);
+    // Live startup feedback for the loading screen: latest status line + elapsed time.
+    const [startupStatus, setStartupStatus] = useState<string>("");
+    const [startupElapsedMs, setStartupElapsedMs] = useState<number>(0);
 
     // Send command to Python via IPC
     const sendPythonCommand = useCallback((command: any): Promise<any> => {
@@ -222,7 +225,20 @@ const App = () => {
                 case 'completion':
                     handleCompletionEvent(eventData.data);
                     break;
-                    
+
+                case 'stderr':
+                    // Backend startup logs are forwarded here. While the app is
+                    // still warming up, show a readable "current step" so the
+                    // loading screen reflects real progress. Skip noisy [timing]
+                    // lines and empty output.
+                    if (typeof eventData.data === 'string') {
+                        const line = eventData.data.trim();
+                        if (line && !line.startsWith('[timing]')) {
+                            setStartupStatus(line);
+                        }
+                    }
+                    break;
+
                 default:
                     console.log("Unknown event type:", eventData.type);
             }
@@ -231,7 +247,16 @@ const App = () => {
         const handlePythonStatus = (event: any, statusData: any) => {
             console.log("Python status:", statusData);
             setPythonReady(statusData.ready);
-            
+
+            // Surface any status message / elapsed time the main process sends
+            // (e.g. the slow-startup warning) so the loading screen isn't static.
+            if (typeof statusData.message === "string" && statusData.message) {
+                setStartupStatus(statusData.message);
+            }
+            if (typeof statusData.elapsedMs === "number") {
+                setStartupElapsedMs(statusData.elapsedMs);
+            }
+
             if (statusData.ready && availableModels.length === 0) {
                 // Load models when Python becomes ready
                 loadAvailableModels();
@@ -531,6 +556,16 @@ const App = () => {
                 <div className="loading-message">
                     Starting up face detection engine...
                 </div>
+                {startupStatus && (
+                    <div className="loading-substatus">
+                        {startupStatus}
+                    </div>
+                )}
+                {startupElapsedMs > 0 && (
+                    <div className="loading-elapsed">
+                        {(startupElapsedMs / 1000).toFixed(0)}s
+                    </div>
+                )}
                 <div className="loading-animation">
                     <div className="dot"></div>
                     <div className="dot"></div>

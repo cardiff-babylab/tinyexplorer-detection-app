@@ -8,8 +8,8 @@ work for video frames extracted in-memory).
 
 from __future__ import annotations
 
+import importlib.util
 import logging
-import sys
 from typing import List, Optional
 
 import numpy as np
@@ -18,14 +18,11 @@ from .base import Detection, VisionDetector, register_detector
 
 logger = logging.getLogger(__name__)
 
-_RETINAFACE_AVAILABLE = False
-try:
-    from retinaface import RetinaFace  # type: ignore
-
-    _RETINAFACE_AVAILABLE = True
-    print("RetinaFace loaded successfully", file=sys.stderr)
-except ImportError as e:
-    print(f"RetinaFace not available: {e}", file=sys.stderr)
+# NOTE: retina-face (and the TensorFlow it pulls in) is intentionally NOT imported
+# at module load time — TensorFlow's cold import is a multi-second startup cost that
+# would block the subprocess "ready" signal on every launch. It is imported lazily
+# inside load()/detect_image() instead, and availability is probed cheaply via
+# importlib.util (which does not execute the module).
 
 
 @register_detector("face_retinaface")
@@ -36,7 +33,11 @@ class FaceRetinaFaceDetector(VisionDetector):
     variants = ["RetinaFace"]
 
     def load(self, weights_dir: str, variant: Optional[str] = None) -> bool:
-        if not _RETINAFACE_AVAILABLE:
+        # Heavy import (retina-face + TensorFlow) happens here lazily, not at
+        # module load time.
+        try:
+            from retinaface import RetinaFace  # type: ignore  # noqa: F401
+        except ImportError:
             self._emit("RetinaFace is not available in this environment")
             self._emit(
                 "Ensure 'retina-face' and 'tensorflow' are installed in the active Python environment"
@@ -48,10 +49,12 @@ class FaceRetinaFaceDetector(VisionDetector):
         return True
 
     def detect_image(self, image: np.ndarray, confidence_threshold: float) -> List[Detection]:
-        if not _RETINAFACE_AVAILABLE:
+        try:
+            from retinaface import RetinaFace  # type: ignore
+        except ImportError as e:
             raise RuntimeError(
                 "FaceRetinaFaceDetector.detect_image called but retina-face is not installed"
-            )
+            ) from e
 
         face_detections = RetinaFace.detect_faces(image, threshold=confidence_threshold)
         detections: List[Detection] = []
@@ -77,4 +80,6 @@ class FaceRetinaFaceDetector(VisionDetector):
 
 
 def is_available() -> bool:
-    return _RETINAFACE_AVAILABLE
+    """Whether retina-face is importable, probed cheaply via importlib.util so we
+    do NOT import TensorFlow just to answer this."""
+    return importlib.util.find_spec("retinaface") is not None

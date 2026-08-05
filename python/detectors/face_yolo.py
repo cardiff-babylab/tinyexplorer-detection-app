@@ -10,9 +10,9 @@ behaviour of the YOLO branch in the original face_detection.py:
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
-import sys
 from typing import List, Optional
 
 import numpy as np
@@ -22,15 +22,13 @@ from .base import Detection, VisionDetector, register_detector
 
 logger = logging.getLogger(__name__)
 
-_YOLO_AVAILABLE = False
-try:
-    from ultralytics import YOLO
-    import torch
-
-    _YOLO_AVAILABLE = True
-    print("YOLO/Ultralytics loaded successfully", file=sys.stderr)
-except ImportError as e:
-    print(f"YOLO/Ultralytics not available: {e}", file=sys.stderr)
+# NOTE: torch and ultralytics are intentionally NOT imported at module load time.
+# They are the single largest contributor to app startup latency (multi-second
+# cold import), and importing them here would block the Python subprocess's
+# "ready" signal — and therefore the app's loading screen — on every launch.
+# Instead we import them lazily inside load()/_select_device(), i.e. only when a
+# detection actually runs. Availability is probed cheaply via importlib.util so
+# the model list can be populated without paying the import cost.
 
 
 _RELEASE_BASE = (
@@ -61,8 +59,11 @@ class FaceYoloDetector(VisionDetector):
         self.weights_path: Optional[str] = None
 
     def load(self, weights_dir: str, variant: Optional[str] = None) -> bool:
-        if not _YOLO_AVAILABLE:
-            self._emit("YOLO/Ultralytics is not available in this environment")
+        # Heavy imports happen here (lazily), not at module import time.
+        try:
+            from ultralytics import YOLO
+        except ImportError as e:
+            self._emit(f"YOLO/Ultralytics is not available in this environment: {e}")
             return False
 
         variant = variant or self.variants[0]
@@ -162,7 +163,9 @@ class FaceYoloDetector(VisionDetector):
 
     @staticmethod
     def _select_device() -> str:
-        if not _YOLO_AVAILABLE:
+        try:
+            import torch
+        except ImportError:
             return "cpu"
         if torch.backends.mps.is_available():
             return "mps"
@@ -173,5 +176,12 @@ class FaceYoloDetector(VisionDetector):
 
 def is_available() -> bool:
     """Whether YOLO/Ultralytics is importable. Used by the orchestrator's
-    legacy ``get_available_models``."""
-    return _YOLO_AVAILABLE
+    legacy ``get_available_models``.
+
+    Uses ``importlib.util.find_spec`` so we can report availability WITHOUT
+    actually importing torch/ultralytics (which would defeat the lazy-load and
+    slow startup). find_spec only locates the module; it does not execute it."""
+    return (
+        importlib.util.find_spec("ultralytics") is not None
+        and importlib.util.find_spec("torch") is not None
+    )

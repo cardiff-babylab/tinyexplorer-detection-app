@@ -29,6 +29,11 @@ jobs:
       - name: Build site
         run: mkdocs build --strict
       - name: Deploy to gh-pages branch
+        # Only publish on push to main (or manual dispatch), never on pull_request.
+        # PRs from forks get a read-only GITHUB_TOKEN, so the deploy push 403s, and
+        # a PR should not publish docs to the production gh-pages branch anyway.
+        # The `mkdocs build --strict` step above still runs on PRs to validate docs.
+        if: github.event_name != 'pull_request'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
