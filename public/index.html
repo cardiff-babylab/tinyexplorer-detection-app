@@ -138,10 +138,14 @@
                                     });
                             }, 100);
                         } else if (channel === "browse-file") {
-                            // Create file input for file selection
+                            // Create file input for file selection. Mirror the
+                            // Electron dialog filters (main/index.ts): audio+video
+                            // in speech mode, images+video otherwise.
                             const input = document.createElement('input');
                             input.type = 'file';
-                            input.accept = 'image/*';
+                            input.accept = (data && data.mode === 'speech')
+                                ? 'audio/*,video/*'
+                                : 'image/*,video/*';
                             input.onchange = (e) => {
                                 if (e.target.files.length > 0) {
                                     const file = e.target.files[0];
