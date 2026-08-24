@@ -421,7 +421,7 @@ const App = () => {
         if (ipcRenderer) {
             ipcRenderer.removeAllListeners("selected-folder");
 
-            ipcRenderer.send("browse-file");
+            ipcRenderer.send("browse-file", { mode: selectedMode });
             ipcRenderer.once("selected-folder", (event: any, payload: any) => {
                 const sel = unpackSelection(payload);
                 if (sel) {

@@ -488,15 +488,26 @@ function createWindow() {
     });
 
     // Handle file browsing
-    ipcMain.on("browse-file", async (event: any) => {
-        const result = await dialog.showOpenDialog(mainWindow!, {
-            properties: ["openFile"],
-            filters: [
+    ipcMain.on("browse-file", async (event: any, options: any = {}) => {
+        const speechFilters = options.mode === "speech";
+        const audioVideoFilter = {
+            name: 'Audio and Video',
+            extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg', 'mp4', 'mov', 'mkv'],
+        };
+        const filters = speechFilters
+            ? [
+                audioVideoFilter,
+                { name: 'All Files', extensions: ['*'] },
+            ]
+            : [
                 { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'] },
                 { name: 'Videos', extensions: ['mp4', 'avi', 'mov'] },
-                { name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg', 'mkv'] },
-                { name: 'All Files', extensions: ['*'] }
-            ]
+                audioVideoFilter,
+                { name: 'All Files', extensions: ['*'] },
+            ];
+        const result = await dialog.showOpenDialog(mainWindow!, {
+            properties: ["openFile"],
+            filters,
         });
         if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
             const p = result.filePaths[0];
