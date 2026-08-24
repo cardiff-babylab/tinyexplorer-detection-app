@@ -108,12 +108,17 @@ const App = () => {
         }
     }, [sendPythonCommand]);
 
+    // Applied once, on the first successful get_models. Status polling can make
+    // loadAvailableModels run again later; re-applying the Face default then
+    // would clobber whatever the user has since selected.
+    const didApplyDefaultModelRef = useRef(false);
+
     // Load available models
     const loadAvailableModels = useCallback(async () => {
         try {
             console.log("Loading available models...");
             const response = await sendPythonCommand({ type: 'get_models' });
-            
+
             if (response.status === 'success') {
                 console.log("Available models loaded:", response.models);
                 setAvailableModels(response.models);
@@ -121,6 +126,11 @@ const App = () => {
                 // Older backends may omit it; default to an empty map (the UI then
                 // falls back to the detector registry, then to an unfiltered list).
                 setModelModes(response.model_modes || {});
+
+                if (didApplyDefaultModelRef.current) {
+                    return;
+                }
+                didApplyDefaultModelRef.current = true;
 
                 // Set RetinaFace as default if available, otherwise use best YOLO face model
                 if (response.models.includes("RetinaFace") && selectedModel === "RetinaFace") {
@@ -598,6 +608,10 @@ const App = () => {
                 handleModelChange(firstVariantForMode);
             }
             didAlignModeRef.current = true;
+            // Alignment for this Mode click is done. Clear the flag, otherwise
+            // this effect re-runs on every selectedModel change and snaps a
+            // manual dropdown pick back to the mode's first variant.
+            userSelectedModeRef.current = false;
             return;
         }
 
