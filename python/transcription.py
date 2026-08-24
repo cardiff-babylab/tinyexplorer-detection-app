@@ -96,6 +96,12 @@ class TranscriptionProcessor:
         output = os.path.join(results_folder, "transcription_results_%s" % timestamp)
         os.makedirs(output, exist_ok=True)
         files = self._files(source)
+        shared_headers = [
+            "id", "frame_idx", "filename", "mode", "start", "end",
+            "label", "confidence", "model", "text", "language",
+        ]
+        shared_rows: List[List[Any]] = []
+        summary_rows: List[List[Any]] = []
         try:
             if not files:
                 raise ValueError("No supported audio or video files found")
@@ -115,24 +121,41 @@ class TranscriptionProcessor:
                     # speech-specific time and text fields.  Empty values are
                     # intentional for frame_idx/confidence: speech is
                     # timestamped rather than frame- or box-based.
-                    writer.writerow([
-                        "id", "frame_idx", "filename", "mode", "start", "end",
-                        "label", "confidence", "model", "text", "language",
-                    ])
+                    writer.writerow(shared_headers)
+                    file_rows = []
                     for segment_id, segment in enumerate(segments, start=1):
                         if segment["text"]:
-                            writer.writerow([
+                            row = [
                                 segment_id, "", os.path.basename(path), "speech",
                                 segment["start"], segment["end"], "speech", "", variant,
                                 segment["text"], language,
-                            ])
+                            ]
+                            writer.writerow(row)
+                            file_rows.append(row)
+                            shared_rows.append(row)
                             self.results.append(dict(segment, audio_path=path, language=language, model=variant))
                 with open(txt_path, "w", encoding="utf-8") as handle:
                     for segment in segments:
                         if segment["text"]:
                             handle.write("[%0.2f-%0.2f] %s\n" % (segment["start"], segment["end"], segment["text"]))
+                summary_rows.append([
+                    path,
+                    "audio",
+                    len(file_rows),
+                    max((row[5] for row in file_rows), default=0.0),
+                    language,
+                    variant,
+                ])
                 self.completion_callback({"status": "audio_completed", "progress_percent": (index + 1) / len(files) * 100,
                                           "audio_index": index + 1, "total_audio": len(files), "audio_path": path}) if self.completion_callback else None
+            with open(os.path.join(output, "detections.csv"), "w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(shared_headers)
+                writer.writerows(shared_rows)
+            with open(os.path.join(output, "summary.csv"), "w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["path", "type", "segments", "duration", "language", "model"])
+                writer.writerows(summary_rows)
             self._emit("✅ Transcription complete. Results saved to: %s" % output)
             if self.completion_callback:
                 self.completion_callback({"status": "completed", "results_folder": output, "results_count": len(self.results)})

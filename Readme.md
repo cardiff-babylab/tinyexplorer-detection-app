@@ -48,7 +48,9 @@ Choose from multiple face detection models included in the app:
 The Speech mode extracts timestamped transcripts from audio files and videos. It
 supports OpenAI Whisper, Faster Whisper, and WhisperX. Results are written to a
 timestamped folder as both `<file>_transcript.txt` and
-`<file>_transcript.csv` (start, end, text, language, and model).
+`<file>_transcript.csv`, plus shared `detections.csv` and `summary.csv` files
+for aggregate processing. The shared CSV uses common identity/source fields
+alongside speech timestamps, text, language, and model information.
 
 The ASR packages are included in newly bundled installers. For development,
 install them in the active Python environment with `pip install -r

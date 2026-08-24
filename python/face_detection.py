@@ -300,15 +300,15 @@ class FaceDetectionProcessor:
 
             if save_results and result_folder and self.results:
                 if self._active_modality() == "hand":
-                    csv_path = os.path.join(result_folder, "hand_detections.csv")
+                    csv_path = os.path.join(result_folder, "detections.csv")
                     dataset = os.path.basename(os.path.normpath(folder_path))
                     self.export_hand_results_to_csv(self.results, csv_path, dataset=dataset)
-                    summary_csv_path = os.path.join(result_folder, "hand_summary.csv")
+                    summary_csv_path = os.path.join(result_folder, "summary.csv")
                     self.export_hand_summary_to_csv(
                         image_files, video_files, summary_csv_path
                     )
                 else:
-                    csv_path = os.path.join(result_folder, "detection_results.csv")
+                    csv_path = os.path.join(result_folder, "detections.csv")
                     self.export_results_to_csv(self.results, csv_path)
                     summary_csv_path = os.path.join(result_folder, "summary.csv")
                     self.export_summary_to_csv(

@@ -38,6 +38,12 @@ class TranscriptionTests(unittest.TestCase):
             self.assertEqual(rows[0]["mode"], "speech")
             self.assertEqual(rows[0]["label"], "speech")
             self.assertEqual(rows[0]["model"], "Faster Whisper")
+            self.assertTrue((result_dirs[0] / "detections.csv").exists())
+            self.assertTrue((result_dirs[0] / "summary.csv").exists())
+            with (result_dirs[0] / "summary.csv").open(newline="", encoding="utf-8") as handle:
+                summary_rows = list(csv.DictReader(handle))
+            self.assertEqual(summary_rows[0]["segments"], "1")
+            self.assertEqual(summary_rows[0]["type"], "audio")
             self.assertIn("[0.00-1.25] hello world", (result_dirs[0] / "sample_transcript.txt").read_text())
 
 
