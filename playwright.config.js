@@ -28,6 +28,9 @@ module.exports = defineConfig({
         ...devices['Desktop Chrome'],
         // Additional Chrome args for X11 forwarding compatibility
         launchOptions: {
+          ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+            ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+            : {}),
           args: process.env.DISPLAY ? [
             '--no-sandbox',
             '--disable-dev-shm-usage',

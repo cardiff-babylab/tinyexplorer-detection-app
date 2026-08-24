@@ -36,6 +36,9 @@
                 // Create IPC renderer stub for web mode
                 window.ipcRendererStub = {
                     callbacks: {},
+                    emit: function(channel, ...args) {
+                        (this.callbacks[channel] || []).slice().forEach((callback) => callback(...args));
+                    },
                     on: function(channel, callback) {
                         if (channel === "pythonStatus") {
                             // Mock Python status for web mode
@@ -45,18 +48,23 @@
                                     pid: 12345
                                 });
                             }, 100);
-                        } else {
-                            this.callbacks[channel] = callback;
                         }
+                        if (!this.callbacks[channel]) this.callbacks[channel] = [];
+                        this.callbacks[channel].push(callback);
                     },
                     once: function(channel, callback) {
-                        this.callbacks[channel] = callback;
+                        const onceCallback = (...args) => {
+                            this.removeListener(channel, onceCallback);
+                            callback(...args);
+                        };
+                        this.on(channel, onceCallback);
                     },
                     removeAllListeners: function(channel) {
                         delete this.callbacks[channel];
                     },
                     removeListener: function(channel, callback) {
-                        delete this.callbacks[channel];
+                        if (!this.callbacks[channel]) return;
+                        this.callbacks[channel] = this.callbacks[channel].filter((item) => item !== callback);
                     },
                     invoke: function(channel, data) {
                         // Web/dev mode: no Electron main process. Resolve update
@@ -84,13 +92,30 @@
                         if (channel === "python-command") {
                             // Mock Python command responses for web mode
                             setTimeout(() => {
-                                if (this.callbacks['python-response']) {
+                                {
                                     let response;
                                     if (data.type === 'get_models') {
                                         response = {
                                             response: {
                                                 status: 'success',
-                                                models: ['yolov8n.pt', 'yolov8l-face.pt']
+                                                models: [
+                                                    'yolov8n.pt',
+                                                    'yolov8l-face.pt',
+                                                    'HandObject-Tuned',
+                                                    'HandObject-Baseline',
+                                                    'Whisper (OpenAI)',
+                                                    'Faster Whisper',
+                                                    'WhisperX'
+                                                ],
+                                                model_modes: {
+                                                    'yolov8n.pt': 'face',
+                                                    'yolov8l-face.pt': 'face',
+                                                    'HandObject-Tuned': 'hand',
+                                                    'HandObject-Baseline': 'hand',
+                                                    'Whisper (OpenAI)': 'speech',
+                                                    'Faster Whisper': 'speech',
+                                                    'WhisperX': 'speech'
+                                                }
                                             }
                                         };
                                     } else {
@@ -101,18 +126,16 @@
                                             }
                                         };
                                     }
-                                    this.callbacks['python-response']({}, response);
+                                    this.emit('python-response', {}, response);
                                 }
                             }, 100);
                         } else if (channel === "getPythonStatus") {
                             // Mock Python status response
                             setTimeout(() => {
-                                if (this.callbacks['pythonStatus']) {
-                                    this.callbacks['pythonStatus']({}, {
+                                this.emit('pythonStatus', {}, {
                                         ready: true,
                                         pid: 12345
                                     });
-                                }
                             }, 100);
                         } else if (channel === "browse-file") {
                             // Create file input for file selection
@@ -123,9 +146,7 @@
                                 if (e.target.files.length > 0) {
                                     const file = e.target.files[0];
                                     const filePath = file.name; // In real scenario this would be full path
-                                    if (this.callbacks['selected-folder']) {
-                                        this.callbacks['selected-folder']({}, filePath);
-                                    }
+                                    this.emit('selected-folder', {}, filePath);
                                 }
                             };
                             input.click();
@@ -140,9 +161,7 @@
                                     const firstFile = e.target.files[0];
                                     const pathParts = firstFile.webkitRelativePath.split('/');
                                     const folderName = pathParts[0];
-                                    if (this.callbacks['selected-folder']) {
-                                        this.callbacks['selected-folder']({}, folderName);
-                                    }
+                                    this.emit('selected-folder', {}, folderName);
                                 }
                             };
                             input.click();

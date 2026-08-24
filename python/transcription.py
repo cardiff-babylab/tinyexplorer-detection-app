@@ -110,10 +110,22 @@ class TranscriptionProcessor:
                 txt_path = os.path.join(output, stem + "_transcript.txt")
                 with open(csv_path, "w", newline="", encoding="utf-8") as handle:
                     writer = csv.writer(handle)
-                    writer.writerow(["start", "end", "text", "language", "model"])
-                    for segment in segments:
+                    # Keep the first columns compatible with the detection
+                    # exporters (id/frame_idx/filename), then add the
+                    # speech-specific time and text fields.  Empty values are
+                    # intentional for frame_idx/confidence: speech is
+                    # timestamped rather than frame- or box-based.
+                    writer.writerow([
+                        "id", "frame_idx", "filename", "mode", "start", "end",
+                        "label", "confidence", "model", "text", "language",
+                    ])
+                    for segment_id, segment in enumerate(segments, start=1):
                         if segment["text"]:
-                            writer.writerow([segment["start"], segment["end"], segment["text"], language, variant])
+                            writer.writerow([
+                                segment_id, "", os.path.basename(path), "speech",
+                                segment["start"], segment["end"], "speech", "", variant,
+                                segment["text"], language,
+                            ])
                             self.results.append(dict(segment, audio_path=path, language=language, model=variant))
                 with open(txt_path, "w", encoding="utf-8") as handle:
                     for segment in segments:
@@ -134,4 +146,3 @@ class TranscriptionProcessor:
         finally:
             self.is_processing = False
             if self.completion_callback: self.completion_callback({"status": "finished", "results_count": len(self.results)})
-

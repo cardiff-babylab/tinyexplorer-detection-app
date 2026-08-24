@@ -526,7 +526,12 @@ const App = () => {
 
     // When a mode is picked, switch the model dropdown to the first variant
     // belonging to that mode (and recompute confidence default for it).
+    const userSelectedModeRef = useRef(false);
+
     const handleModeChange = (newMode: string) => {
+        // Do not let the asynchronous startup alignment below overwrite an
+        // explicit user choice while model metadata is still arriving.
+        userSelectedModeRef.current = true;
         setSelectedMode(newMode);
         // Keep the Model widget in sync with the Mode: switch to this mode's first
         // available variant. If the mode has no available models, clear the
@@ -580,12 +585,22 @@ const App = () => {
     // it runs once and never fights an explicit Mode switch.
     const didAlignModeRef = useRef(false);
     useEffect(() => {
-        if (didAlignModeRef.current) return;
+        if (didAlignModeRef.current && !userSelectedModeRef.current) return;
         // Need models plus at least one source of modality info (model_modes or
         // the registry) before we can align Mode to Model.
         const haveModeInfo =
             Object.keys(modelModes).length > 0 || Object.keys(detectorRegistry).length > 0;
         if (availableModels.length === 0 || !haveModeInfo) return;
+
+        if (userSelectedModeRef.current) {
+            const firstVariantForMode = availableModels.find(v => modeOfVariant(v) === selectedMode);
+            if (firstVariantForMode && firstVariantForMode !== selectedModel) {
+                handleModelChange(firstVariantForMode);
+            }
+            didAlignModeRef.current = true;
+            return;
+        }
+
         didAlignModeRef.current = true;
 
         if (availableModels.includes(selectedModel)) {
@@ -863,40 +878,42 @@ const App = () => {
                         </select>
                     </div>
 
-                    <div className="control-section">
-                        <label>
-                            {(() => {
-                                const detectorKey = getDetectorKeyForVariant(selectedModel);
-                                const info = detectorKey ? detectorRegistry[detectorKey] : null;
-                                return info ? (
-                                    <span
-                                        role="img"
-                                        aria-label={`${info.name} modality`}
-                                        className="modality-icon"
-                                    >
-                                        {getDetectorIcon(info.name)}{" "}
-                                    </span>
-                                ) : null;
-                            })()}
-                            Select Confidence Threshold:
-                        </label>
-                        <div className="threshold-control">
-                            <input 
-                                type="range" 
-                                min="0.1" 
-                                max="1.0" 
-                                step="0.01" 
-                                value={confidenceThreshold}
-                                onChange={(e) => {
-                                    const newValue = parseFloat(e.target.value);
-                                    console.log("User adjusted confidence threshold from", confidenceThreshold, "to", newValue);
-                                    setConfidenceThreshold(newValue);
-                                }}
-                                className="threshold-slider"
-                            />
-                            <span className="threshold-value">{confidenceThreshold.toFixed(2)}</span>
+                    {selectedMode !== "speech" && (
+                        <div className="control-section">
+                            <label>
+                                {(() => {
+                                    const detectorKey = getDetectorKeyForVariant(selectedModel);
+                                    const info = detectorKey ? detectorRegistry[detectorKey] : null;
+                                    return info ? (
+                                        <span
+                                            role="img"
+                                            aria-label={`${info.name} modality`}
+                                            className="modality-icon"
+                                        >
+                                            {getDetectorIcon(info.name)}{" "}
+                                        </span>
+                                    ) : null;
+                                })()}
+                                Select Confidence Threshold:
+                            </label>
+                            <div className="threshold-control">
+                                <input
+                                    type="range"
+                                    min="0.1"
+                                    max="1.0"
+                                    step="0.01"
+                                    value={confidenceThreshold}
+                                    onChange={(e) => {
+                                        const newValue = parseFloat(e.target.value);
+                                        console.log("User adjusted confidence threshold from", confidenceThreshold, "to", newValue);
+                                        setConfidenceThreshold(newValue);
+                                    }}
+                                    className="threshold-slider"
+                                />
+                                <span className="threshold-value">{confidenceThreshold.toFixed(2)}</span>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     <div className="control-section">
                         <label>Results will be saved to:</label>

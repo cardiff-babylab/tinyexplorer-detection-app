@@ -27,6 +27,17 @@ class TranscriptionTests(unittest.TestCase):
             with (result_dirs[0] / "sample_transcript.csv").open(newline="", encoding="utf-8") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual(rows[0]["text"], "hello world")
+            self.assertEqual(
+                rows[0].keys(),
+                {
+                    "id", "frame_idx", "filename", "mode", "start", "end",
+                    "label", "confidence", "model", "text", "language",
+                },
+            )
+            self.assertEqual(rows[0]["filename"], "sample.wav")
+            self.assertEqual(rows[0]["mode"], "speech")
+            self.assertEqual(rows[0]["label"], "speech")
+            self.assertEqual(rows[0]["model"], "Faster Whisper")
             self.assertIn("[0.00-1.25] hello world", (result_dirs[0] / "sample_transcript.txt").read_text())
 
 
