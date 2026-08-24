@@ -335,6 +335,7 @@ fs.mkdirSync(handEnvDir, { recursive: true });
 
 // Use requirements from source tree
 const yoloRequirementsPath = path.join(__dirname, '..', 'python', 'requirements.txt');
+const whisperRequirementsPath = path.join(__dirname, '..', 'python', 'requirements-whisper.txt');
 const retinafaceRequirementsPath = path.join(__dirname, '..', 'python', 'requirements-retinaface.txt');
 
 // Main async function
@@ -410,6 +411,14 @@ async function setupEnvironments() {
                 throw fallbackError;
             }
         }
+
+        // Speech uses the shared YOLO/PyTorch runtime, avoiding a fourth
+        // packaged interpreter while making transcription work in installers.
+        console.log('Installing Whisper transcription packages...');
+        execSync(`"${yoloPython}" -m pip install --no-cache-dir --upgrade -r "${whisperRequirementsPath}"`, {
+            stdio: 'inherit',
+            env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1' }
+        });
         
         // Create RetinaFace virtual environment (Unix only, Windows already has standalone copy)
         console.log('Setting up RetinaFace environment...');

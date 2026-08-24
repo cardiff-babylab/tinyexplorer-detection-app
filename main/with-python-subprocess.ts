@@ -30,6 +30,7 @@ const detectModelType = (command: any): string => {
     // Check if this is a processing command with model selection
     if (command && command.type === 'start_processing' && command.data && command.data.model) {
         const model = command.data.model.toLowerCase();
+        if (model.includes('whisper')) return 'yolo';
         if (model.includes('handobject')) return 'hand';
         if (model.includes('retinaface')) return 'retinaface';
         return 'yolo';

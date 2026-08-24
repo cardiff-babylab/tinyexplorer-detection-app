@@ -50,11 +50,10 @@ supports OpenAI Whisper, Faster Whisper, and WhisperX. Results are written to a
 timestamped folder as both `<file>_transcript.txt` and
 `<file>_transcript.csv` (start, end, text, language, and model).
 
-The ASR packages are optional because they are large. Install them in the same
-Python environment used by the app with `pip install -r
-python/requirements-whisper.txt`; WhisperX can be added separately when its
-alignment/diarisation dependencies are available. Model weights are downloaded
-on first use and remain local.
+The ASR packages are included in newly bundled installers. For development,
+install them in the active Python environment with `pip install -r
+python/requirements-whisper.txt`. Model weights are downloaded on first use and
+remain local.
 
 The app automatically downloads required model weights when needed.
 

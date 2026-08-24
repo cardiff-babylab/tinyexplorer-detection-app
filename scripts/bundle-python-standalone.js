@@ -218,6 +218,7 @@ async function createVirtualEnvironments(pythonStandaloneDir) {
 
     // Use requirements from source tree
     const yoloRequirementsPath = path.join(__dirname, '..', 'python', 'requirements.txt');
+    const whisperRequirementsPath = path.join(__dirname, '..', 'python', 'requirements-whisper.txt');
     const retinafaceRequirementsPath = path.join(__dirname, '..', 'python', 'requirements-retinaface.txt');
     const handRequirementsPath = path.join(__dirname, '..', 'python', 'requirements-hand.txt');
     
@@ -245,6 +246,12 @@ async function createVirtualEnvironments(pythonStandaloneDir) {
     
     console.log('Installing YOLO dependencies...');
     execSync(`"${yoloPython}" -m pip install --no-cache-dir --upgrade -r "${yoloRequirementsPath}"`, {
+        stdio: 'inherit',
+        env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1' }
+    });
+
+    console.log('Installing Whisper transcription packages...');
+    execSync(`"${yoloPython}" -m pip install --no-cache-dir --upgrade -r "${whisperRequirementsPath}"`, {
         stdio: 'inherit',
         env: { ...process.env, PIP_DISABLE_PIP_VERSION_CHECK: '1' }
     });

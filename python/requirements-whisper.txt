@@ -1,8 +1,5 @@
-# Optional audio transcription environment. Keep separate from the vision
-# environments so face/hand startup and installers do not pull in large ASR
-# dependencies unless transcription is needed.
+# Audio transcription packages installed into the shared CPU/PyTorch runtime.
 openai-whisper
 faster-whisper
 soundfile
-# WhisperX is optional; install it to use the WhisperX backend.
-# whisperx
+whisperx
