@@ -32,11 +32,11 @@ const App = () => {
     const MODE_AVAILABILITY: Readonly<Record<string, boolean>> = {
         face: true,
         hand: true,
-        speech: false,
+        speech: true,
     };
-    // Parked for now: speech detection is planned but not near-term, so keep the
-    // wiring and hide the button. Remove "speech" here to bring it back.
-    const HIDDEN_MODES: ReadonlySet<string> = new Set(["speech"]);
+    // Speech is implemented as local transcription and is intentionally kept in
+    // the same mode/model registry as the vision backends.
+    const HIDDEN_MODES: ReadonlySet<string> = new Set([]);
     const [selectedMode, setSelectedMode] = useState<string>("face");
     const [results, setResults] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
     const [resultsFolder, setResultsFolder] = useState("");
@@ -191,12 +191,16 @@ const App = () => {
                 
             case 'image_completed':
                 setProgress(data.progress_percent);
-                console.log(`Image ${data.image_index}/${data.total_images} completed: ${data.detections_in_image} faces found`);
+                console.log(`Image ${data.image_index}/${data.total_images} completed: ${data.detections_in_image} detections found`);
                 break;
                 
             case 'frame_completed':
                 setProgress(data.progress_percent);
                 console.log(`Frame ${data.frame_index} at ${data.timestamp.toFixed(1)}s: ${data.detections_in_frame} faces found`);
+                break;
+
+            case 'audio_completed':
+                setProgress(data.progress_percent);
                 break;
                 
             case 'completed':
@@ -613,7 +617,7 @@ const App = () => {
     }, [availableModels, detectorRegistry, modelModes]);
 
     const handleStartProcessing = async () => {
-        console.log("User clicked 'Start Detection' button");
+        console.log(selectedMode === "speech" ? "User clicked 'Start Transcription' button" : "User clicked 'Start Detection' button");
         console.log("Processing parameters:", {
             folder: selectedFolder,
             model: selectedModel,
@@ -920,7 +924,7 @@ const App = () => {
                                 disabled={!selectedFolder || !pythonReady}
                                 className="start-btn"
                             >
-                                Start Detection
+                                {selectedMode === "speech" ? "Start Transcription" : "Start Detection"}
                             </button>
                         ) : isStarting ? (
                             <button 

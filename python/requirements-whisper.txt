@@ -1,0 +1,8 @@
+# Optional audio transcription environment. Keep separate from the vision
+# environments so face/hand startup and installers do not pull in large ASR
+# dependencies unless transcription is needed.
+openai-whisper
+faster-whisper
+soundfile
+# WhisperX is optional; install it to use the WhisperX backend.
+# whisperx

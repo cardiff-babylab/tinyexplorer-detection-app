@@ -494,6 +494,7 @@ function createWindow() {
             filters: [
                 { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'] },
                 { name: 'Videos', extensions: ['mp4', 'avi', 'mov'] },
+                { name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg', 'mkv'] },
                 { name: 'All Files', extensions: ['*'] }
             ]
         });

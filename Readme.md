@@ -43,6 +43,19 @@ Choose from multiple face detection models included in the app:
 - YOLOv12l-face (Large): latest large model; highest accuracy and resource use; recommended for offline batch processing.
 - RetinaFace: alternative architecture with facial landmarks; good speed/accuracy for feature localization. Note: available on Apple Silicon (arm64) macOS only.
 
+### Audio transcription
+
+The Speech mode extracts timestamped transcripts from audio files and videos. It
+supports OpenAI Whisper, Faster Whisper, and WhisperX. Results are written to a
+timestamped folder as both `<file>_transcript.txt` and
+`<file>_transcript.csv` (start, end, text, language, and model).
+
+The ASR packages are optional because they are large. Install them in the same
+Python environment used by the app with `pip install -r
+python/requirements-whisper.txt`; WhisperX can be added separately when its
+alignment/diarisation dependencies are available. Model weights are downloaded
+on first use and remain local.
+
 The app automatically downloads required model weights when needed.
 
 ### Model Sources

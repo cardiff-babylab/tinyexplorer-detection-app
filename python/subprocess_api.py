@@ -24,6 +24,7 @@ from calc import calc as real_calc
 # detectors' lazy imports, this no longer drags in torch/TensorFlow, so it stays
 # cheap and does not block the "ready" signal below.
 from face_detection import FaceDetectionProcessor
+from transcription import TRANSCRIPTION_VARIANTS, TranscriptionProcessor
 
 if _TIMING_ENABLED:
     print(
@@ -35,6 +36,7 @@ if _TIMING_ENABLED:
 class SubprocessAPI:
     def __init__(self):
         self.face_processor = None
+        self.transcription_processor = None
         self.running = True
         self.progress_messages = []
         self.python_logs = []
@@ -43,6 +45,10 @@ class SubprocessAPI:
         self.face_processor = FaceDetectionProcessor(
             self.progress_callback,
             self.completion_callback
+        )
+        self.transcription_processor = TranscriptionProcessor(
+            self.progress_callback,
+            self.completion_callback,
         )
         
         # Capture stdout for logging (but we'll use stderr for logs to avoid conflicts)
@@ -87,6 +93,8 @@ class SubprocessAPI:
                 self.face_processor.stop_processing()
             except:
                 pass
+        if self.transcription_processor:
+            self.transcription_processor.stop_processing()
         # Flush outputs
         sys.stdout.flush()
         sys.stderr.flush()
@@ -150,6 +158,10 @@ class SubprocessAPI:
                 try:
                     models = self.face_processor.get_available_models()
                     model_modes = self.face_processor.get_available_model_modes()
+                    # Audio models are registry entries rather than vision
+                    # weights, so they are always listed and loaded lazily.
+                    models += [m for m in TRANSCRIPTION_VARIANTS if m not in models]
+                    model_modes.update({m: 'speech' for m in TRANSCRIPTION_VARIANTS})
                     return {'status': 'success', 'models': models, 'model_modes': model_modes}
                 except Exception as e:
                     return {'status': 'error', 'message': str(e)}
@@ -185,11 +197,15 @@ class SubprocessAPI:
                         model = first.get('variant', model)
                         confidence = first.get('confidence', confidence)
 
-                    # Start processing in a separate thread
-                    thread = threading.Thread(
-                        target=self.face_processor.process_folder,
-                        args=(folder_path, confidence, model, save_results, results_folder)
-                    )
+                    detector_key = first.get('key') if isinstance(detectors_list, list) and detectors_list else None
+                    if detector_key == 'speech_whisper' or model in TRANSCRIPTION_VARIANTS:
+                        if not results_folder:
+                            return {'status': 'error', 'message': 'A results folder is required for transcription'}
+                        thread = threading.Thread(target=self.transcription_processor.process,
+                                                  args=(folder_path, model, results_folder))
+                    else:
+                        thread = threading.Thread(target=self.face_processor.process_folder,
+                                                  args=(folder_path, confidence, model, save_results, results_folder))
                     thread.start()
 
                     return {'status': 'success', 'message': 'Processing started'}
@@ -199,6 +215,7 @@ class SubprocessAPI:
             elif cmd_type == 'stop_processing':
                 try:
                     self.face_processor.stop_processing()
+                    self.transcription_processor.stop_processing()
                     return {'status': 'success', 'message': 'Processing stopped'}
                 except Exception as e:
                     return {'status': 'error', 'message': str(e)}
@@ -206,6 +223,8 @@ class SubprocessAPI:
             elif cmd_type == 'get_results':
                 try:
                     results = self.face_processor.get_results()
+                    if self.transcription_processor and self.transcription_processor.results:
+                        results = self.transcription_processor.results
                     return {'status': 'success', 'results': results}
                 except Exception as e:
                     return {'status': 'error', 'message': str(e)}
