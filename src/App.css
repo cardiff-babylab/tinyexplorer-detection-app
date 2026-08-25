@@ -215,7 +215,8 @@
   background-color: #0056b3;
 }
 
-.model-select {
+.model-select,
+.whisper-size-select {
   width: 100%;
   padding: 10px 14px;
   margin: 10px 0;

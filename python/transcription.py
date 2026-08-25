@@ -28,6 +28,7 @@ class TranscriptionProcessor:
         self._stop = threading.Event()
         self._model: Any = None
         self._model_variant: Optional[str] = None
+        self._model_size: Optional[str] = None
         # WhisperX extras, cached across files: (language, model, metadata) and
         # the pyannote diarization pipeline.
         self._align_cache: Optional[Tuple[str, Any, Any]] = None
@@ -58,21 +59,23 @@ class TranscriptionProcessor:
     def _hf_token() -> str:
         return os.environ.get("TINYEXPLORER_HF_TOKEN") or os.environ.get("HF_TOKEN") or ""
 
-    def _load_model(self, variant: str) -> None:
-        self._emit("🎤 Loading transcription model (first use may download model weights)...")
+    def _load_model(self, variant: str, size: Optional[str] = None) -> None:
+        # Explicit UI choice wins; the env var covers headless use; "base"
+        # keeps old callers working.
+        model_name = size or os.environ.get("TINYEXPLORER_WHISPER_MODEL", "base")
+        self._emit("🎤 Loading transcription model '%s' (first use may download model weights)..." % model_name)
         if variant == "Whisper (OpenAI)":
             import whisper
-            self._model = whisper.load_model(os.environ.get("TINYEXPLORER_WHISPER_MODEL", "base"))
+            self._model = whisper.load_model(model_name)
         elif variant == "Faster Whisper":
             from faster_whisper import WhisperModel
-            model_name = os.environ.get("TINYEXPLORER_WHISPER_MODEL", "base")
             device = self._device()
             compute = "float16" if device == "cuda" else "int8"
             self._model = WhisperModel(model_name, device=device, compute_type=compute)
         elif variant == "WhisperX":
             import whisperx
             device = self._device()
-            self._model = whisperx.load_model(os.environ.get("TINYEXPLORER_WHISPER_MODEL", "base"), device=device,
+            self._model = whisperx.load_model(model_name, device=device,
                                               compute_type="float16" if device == "cuda" else "int8")
             if not self._hf_token():
                 self._emit("ℹ️ Set TINYEXPLORER_HF_TOKEN (Hugging Face) to enable speaker diarization; "
@@ -80,6 +83,7 @@ class TranscriptionProcessor:
         else:
             raise ValueError("Unknown transcription model: %s" % variant)
         self._model_variant = variant
+        self._model_size = size
 
     @staticmethod
     def _load_audio(path: str) -> Any:
@@ -107,9 +111,9 @@ class TranscriptionProcessor:
         audio = np.concatenate([c.reshape(-1) for c in chunks])
         return audio.astype(np.float32) / 32768.0
 
-    def _transcribe(self, path: str, variant: str) -> Tuple[List[Dict[str, Any]], str]:
-        if self._model_variant != variant or self._model is None:
-            self._load_model(variant)
+    def _transcribe(self, path: str, variant: str, size: Optional[str] = None) -> Tuple[List[Dict[str, Any]], str]:
+        if self._model_variant != variant or self._model_size != size or self._model is None:
+            self._load_model(variant, size)
         if variant == "Faster Whisper":
             segments, info = self._model.transcribe(path, word_timestamps=True)
             return [self._segment_dict(s.start, s.end, s.text, getattr(s, "words", None)) for s in segments], getattr(info, "language", "unknown")
@@ -176,7 +180,8 @@ class TranscriptionProcessor:
         return {"start": float(start or 0), "end": float(end or 0), "text": str(text or "").strip(),
                 "words": out_words, "speaker": str(speaker) if speaker else ""}
 
-    def process(self, source: str, variant: str, results_folder: str) -> None:
+    def process(self, source: str, variant: str, results_folder: str,
+                size: Optional[str] = None) -> None:
         self.is_processing = True
         self._stop.clear()
         self.results = []
@@ -202,7 +207,7 @@ class TranscriptionProcessor:
                 if self._stop.is_set():
                     break
                 self._emit("🎤 Transcribing %d/%d: %s" % (index + 1, len(files), os.path.basename(path)))
-                segments, language = self._transcribe(path, variant)
+                segments, language = self._transcribe(path, variant, size)
                 stem = os.path.splitext(os.path.basename(path))[0]
                 csv_path = os.path.join(output, stem + "_transcript.csv")
                 txt_path = os.path.join(output, stem + "_transcript.txt")

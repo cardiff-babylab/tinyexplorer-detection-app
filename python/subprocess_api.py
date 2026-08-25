@@ -208,8 +208,9 @@ class SubprocessAPI:
                     if detector_key == 'speech_whisper' or model in TRANSCRIPTION_VARIANTS:
                         if not results_folder:
                             return {'status': 'error', 'message': 'A results folder is required for transcription'}
+                        whisper_size = data.get('whisper_size')
                         thread = threading.Thread(target=self.transcription_processor.process,
-                                                  args=(folder_path, model, results_folder))
+                                                  args=(folder_path, model, results_folder, whisper_size))
                     else:
                         thread = threading.Thread(target=self.face_processor.process_folder,
                                                   args=(folder_path, confidence, model, save_results, results_folder))

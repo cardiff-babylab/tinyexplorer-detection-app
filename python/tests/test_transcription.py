@@ -11,7 +11,7 @@ from transcription import TRANSCRIPTION_VARIANTS, TranscriptionProcessor
 
 
 class FakeTranscriptionProcessor(TranscriptionProcessor):
-    def _transcribe(self, path, variant):
+    def _transcribe(self, path, variant, size=None):
         return [{
             "start": 0.0, "end": 1.25, "text": "hello world", "speaker": "SPEAKER_00",
             "words": [
@@ -84,7 +84,7 @@ class TranscriptionTests(unittest.TestCase):
 
     def test_no_words_csv_when_backend_has_no_word_output(self):
         class UtteranceOnlyProcessor(TranscriptionProcessor):
-            def _transcribe(self, path, variant):
+            def _transcribe(self, path, variant, size=None):
                 return [{"start": 0.0, "end": 1.0, "text": "hi", "words": [], "speaker": ""}], "en"
 
         with tempfile.TemporaryDirectory() as temp:
@@ -172,6 +172,29 @@ class BackendCallSignatureTests(unittest.TestCase):
 
     def test_whisperx_call_matches_backend_signature(self):
         self._run("WhisperX", {"whisperx": _fake_whisperx_module()})
+
+    def test_model_size_is_passed_to_backend_and_triggers_reload(self):
+        loaded_sizes = []
+        mod = types.ModuleType("whisper")
+
+        class _Model:
+            def transcribe(self, audio, word_timestamps=False, fp16=True, **decode_options):
+                return {"segments": [{"start": 0.0, "end": 1.0, "text": "hi", "words": []}],
+                        "language": "en"}
+
+        def load_model(name):
+            loaded_sizes.append(name)
+            return _Model()
+
+        mod.load_model = load_model
+        processor = TranscriptionProcessor()
+        with mock.patch.dict(sys.modules, {"whisper": mod}), \
+                mock.patch.object(TranscriptionProcessor, "_load_audio",
+                                  staticmethod(lambda path: [0.0] * 16000)):
+            processor._transcribe("sample.wav", "Whisper (OpenAI)", "large-v2")
+            processor._transcribe("sample.wav", "Whisper (OpenAI)", "large-v2")  # cached, no reload
+            processor._transcribe("sample.wav", "Whisper (OpenAI)", "small")     # size change reloads
+        self.assertEqual(loaded_sizes, ["large-v2", "small"])
 
     def test_switching_models_in_one_session_reloads_backend(self):
         # A processor is reused across runs; picking a different model for a

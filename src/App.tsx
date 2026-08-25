@@ -38,6 +38,15 @@ const App = () => {
     // the same mode/model registry as the vision backends.
     const HIDDEN_MODES: ReadonlySet<string> = new Set([]);
     const [selectedMode, setSelectedMode] = useState<string>("face");
+    // Whisper checkpoint size for Speech mode, mirroring the sizes the
+    // requester's reference script exposes. large-v2 matches the quality of
+    // the reference outputs; smaller sizes trade accuracy for speed.
+    const WHISPER_SIZES: ReadonlyArray<string> = [
+        "tiny", "tiny.en", "base", "base.en", "small", "small.en",
+        "medium", "medium.en", "large-v1", "large-v2", "large-v3",
+        "turbo", "large-v3-turbo",
+    ];
+    const [whisperSize, setWhisperSize] = useState<string>("large-v2");
     const [results, setResults] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
     const [resultsFolder, setResultsFolder] = useState("");
     const [completedResultsFolder, setCompletedResultsFolder] = useState("");
@@ -740,6 +749,9 @@ const App = () => {
                 save_results: true,
                 results_folder: resultsFolder,
             };
+            if (selectedMode === "speech") {
+                data.whisper_size = whisperSize;
+            }
             if (detectorKey) {
                 data.detectors = [{
                     key: detectorKey,
@@ -1012,6 +1024,30 @@ const App = () => {
                             </button>
                         )}
                     </div>
+
+                    {selectedMode === "speech" && (
+                        <div className="control-section">
+                            <label>Select Model Size:</label>
+                            <select
+                                value={whisperSize}
+                                onChange={(e) => {
+                                    console.log("User changed Whisper size from", whisperSize, "to", e.target.value);
+                                    setWhisperSize(e.target.value);
+                                }}
+                                className="whisper-size-select"
+                            >
+                                {WHISPER_SIZES.map(size => (
+                                    <option key={size} value={size}>{size}</option>
+                                ))}
+                            </select>
+                            <div className="file-info">
+                                <small>
+                                    Larger models transcribe more accurately but run slower;
+                                    the first use of a size downloads its weights (~3&nbsp;GB for large).
+                                </small>
+                            </div>
+                        </div>
+                    )}
 
                     {selectedMode !== "speech" && (
                         <div className="control-section">
