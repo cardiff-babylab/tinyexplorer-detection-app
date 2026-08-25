@@ -901,23 +901,7 @@ const App = () => {
                         <img src="dragon.png" alt="App Logo" style={{ width: '32px', height: '32px' }} />
                     </div>
                     
-                    <div className="control-section">
-                        <label>Select File or Folder:</label>
-                        <div className="file-input-group">
-                            <input 
-                                type="text" 
-                                value={selectedFolder} 
-                                readOnly 
-                                placeholder="No file or folder selected..."
-                                className="file-input"
-                            />
-                        </div>
-                        <div className="button-group">
-                            <button onClick={handleBrowseFile} className="browse-btn">Browse File</button>
-                            <button onClick={handleBrowseFolder} className="browse-btn">Browse Folder</button>
-                        </div>
-                    </div>
-
+                    {/* Mode comes first: it decides which file types Browse File accepts. */}
                     <div className="control-section">
                         <label>Select Mode:</label>
                         <div className="mode-selector">
@@ -944,6 +928,23 @@ const App = () => {
                                     </button>
                                 );
                             })}
+                        </div>
+                    </div>
+
+                    <div className="control-section">
+                        <label>Select File or Folder:</label>
+                        <div className="file-input-group">
+                            <input
+                                type="text"
+                                value={selectedFolder}
+                                readOnly
+                                placeholder="No file or folder selected..."
+                                className="file-input"
+                            />
+                        </div>
+                        <div className="button-group">
+                            <button onClick={handleBrowseFile} className="browse-btn">Browse File</button>
+                            <button onClick={handleBrowseFolder} className="browse-btn">Browse Folder</button>
                         </div>
                     </div>
 
