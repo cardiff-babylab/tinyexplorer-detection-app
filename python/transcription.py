@@ -155,9 +155,14 @@ class TranscriptionProcessor:
         if not self._hf_token():
             return segments
         try:
+            import inspect
             from whisperx.diarize import DiarizationPipeline, assign_word_speakers
             if self._diarizer is None:
-                self._diarizer = DiarizationPipeline(use_auth_token=self._hf_token(), device=device)
+                # whisperx >= 3.8 renamed the auth kwarg from use_auth_token
+                # to token; support both.
+                params = inspect.signature(DiarizationPipeline.__init__).parameters
+                token_kwarg = "token" if "token" in params else "use_auth_token"
+                self._diarizer = DiarizationPipeline(**{token_kwarg: self._hf_token(), "device": device})
             diarization = self._diarizer(audio)
             segments = assign_word_speakers(diarization, {"segments": segments}).get("segments", segments)
         except Exception as exc:

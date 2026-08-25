@@ -131,6 +131,36 @@ def _fake_faster_whisper_module():
     return mod
 
 
+def _fake_whisperx_with_diarization():
+    """Fake whisperx incl. align + diarize with the REAL 3.8.6 signatures:
+    DiarizationPipeline takes `token=`, not `use_auth_token=`."""
+    mod = _fake_whisperx_module()
+    mod.load_align_model = lambda language_code, device: ("align-model", {"lang": language_code})
+    mod.align = lambda segments, model_a, metadata, audio, device: {
+        "segments": [dict(s, words=[{"word": "hi", "start": 0.0, "end": 1.0, "score": 0.9}])
+                     for s in segments]}
+
+    diarize_mod = types.ModuleType("whisperx.diarize")
+
+    class DiarizationPipeline:
+        def __init__(self, model_name=None, token=None, device="cpu", cache_dir=None):
+            if not token:
+                raise ValueError("token required")
+
+        def __call__(self, audio, num_speakers=None, min_speakers=None, max_speakers=None):
+            return "diarize-df"
+
+    def assign_word_speakers(diarize_df, result):
+        return {"segments": [dict(s, speaker="SPEAKER_00",
+                                  words=[dict(w, speaker="SPEAKER_00") for w in s.get("words", [])])
+                             for s in result["segments"]]}
+
+    diarize_mod.DiarizationPipeline = DiarizationPipeline
+    diarize_mod.assign_word_speakers = assign_word_speakers
+    mod.diarize = diarize_mod
+    return mod, diarize_mod
+
+
 def _fake_whisperx_module():
     mod = types.ModuleType("whisperx")
 
@@ -172,6 +202,19 @@ class BackendCallSignatureTests(unittest.TestCase):
 
     def test_whisperx_call_matches_backend_signature(self):
         self._run("WhisperX", {"whisperx": _fake_whisperx_module()})
+
+    def test_whisperx_diarization_uses_current_token_kwarg(self):
+        mod, diarize_mod = _fake_whisperx_with_diarization()
+        processor = TranscriptionProcessor()
+        with mock.patch.dict(sys.modules, {"whisperx": mod, "whisperx.diarize": diarize_mod}), \
+                mock.patch.dict(os.environ, {"TINYEXPLORER_HF_TOKEN": "hf_test"}), \
+                mock.patch.object(TranscriptionProcessor, "_load_audio",
+                                  staticmethod(lambda path: [0.0] * 16000)):
+            segments, language = processor._transcribe("sample.wav", "WhisperX")
+        self.assertEqual(language, "en")
+        self.assertEqual(segments[0]["speaker"], "SPEAKER_00")
+        self.assertEqual(segments[0]["words"][0]["speaker"], "SPEAKER_00")
+        self.assertEqual(segments[0]["words"][0]["probability"], 0.9)
 
     def test_model_size_is_passed_to_backend_and_triggers_reload(self):
         loaded_sizes = []
