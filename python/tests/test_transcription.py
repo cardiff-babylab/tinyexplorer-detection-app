@@ -274,19 +274,35 @@ class BackendCallSignatureTests(unittest.TestCase):
         self.assertEqual(processor._model_variant, "WhisperX")
 
 
+def _fake_hub_modules():
+    """A fake huggingface_hub whose progress factory raises unless the app's
+    download hook has replaced it — any hub download outside the hook fails."""
+    hf_pkg = types.ModuleType("huggingface_hub")
+    hf_fd = types.ModuleType("huggingface_hub.file_download")
+
+    def _unpatched_context(*args, **kwargs):
+        raise AssertionError("hub download ran outside the progress hook")
+
+    hf_fd._get_progress_bar_context = _unpatched_context
+    hf_pkg.file_download = hf_fd
+    return hf_pkg, hf_fd, _unpatched_context
+
+
+def _simulate_hub_download(filename, total):
+    """What a backend does internally while loading weights: build a bar via
+    the (possibly patched) factory and push byte updates through it."""
+    import huggingface_hub.file_download as fd
+    with fd._get_progress_bar_context(desc=filename, log_level=0, total=total,
+                                      name="huggingface_hub.http_get") as bar:
+        bar.update(total // 2)
+        bar.update(total - total // 2)
+
+
 class DownloadProgressTests(unittest.TestCase):
     def test_hf_hook_covers_progress_bar_context_hub_036(self):
         """huggingface_hub >= 0.36 (incl. the xet transport) builds bars via
         file_download._get_progress_bar_context — the hook must intercept it."""
-        hf_pkg = types.ModuleType("huggingface_hub")
-        hf_fd = types.ModuleType("huggingface_hub.file_download")
-
-        def _real_context(*, desc, log_level=0, total=None, initial=0,
-                          unit="B", unit_scale=True, name=None, _tqdm_bar=None):
-            raise AssertionError("original progress context should be bypassed")
-
-        hf_fd._get_progress_bar_context = _real_context
-        hf_pkg.file_download = hf_fd
+        hf_pkg, hf_fd, _real_context = _fake_hub_modules()
         messages = []
         processor = TranscriptionProcessor(progress_callback=messages.append)
         with mock.patch.dict(sys.modules, {"huggingface_hub": hf_pkg,
@@ -309,6 +325,42 @@ class DownloadProgressTests(unittest.TestCase):
         self.assertTrue(downloads)
         self.assertIn("50%", downloads[0])
         self.assertIn("100%", downloads[-1])
+
+    def test_faster_whisper_load_runs_inside_progress_hook(self):
+        hf_pkg, hf_fd, _ = _fake_hub_modules()
+        mod = types.ModuleType("faster_whisper")
+
+        class WhisperModel:
+            def __init__(self, name, device="cpu", compute_type="int8"):
+                _simulate_hub_download("model.bin", 4 * 1048576)
+
+        mod.WhisperModel = WhisperModel
+        messages = []
+        processor = TranscriptionProcessor(progress_callback=messages.append)
+        with mock.patch.dict(sys.modules, {"faster_whisper": mod,
+                                           "huggingface_hub": hf_pkg,
+                                           "huggingface_hub.file_download": hf_fd}):
+            processor._load_model("Faster Whisper", "tiny")
+        # Would raise inside the fake hub if _load_model dropped the hook.
+        self.assertTrue(any(m.startswith("⏳ Downloading model.bin: 100%") for m in messages))
+
+    def test_whisperx_load_runs_inside_progress_hook(self):
+        hf_pkg, hf_fd, _ = _fake_hub_modules()
+        mod = _fake_whisperx_module()
+        original_load = mod.load_model
+
+        def load_model(name, device="cpu", compute_type="int8"):
+            _simulate_hub_download("model.safetensors", 8 * 1048576)
+            return original_load(name, device=device, compute_type=compute_type)
+
+        mod.load_model = load_model
+        messages = []
+        processor = TranscriptionProcessor(progress_callback=messages.append)
+        with mock.patch.dict(sys.modules, {"whisperx": mod,
+                                           "huggingface_hub": hf_pkg,
+                                           "huggingface_hub.file_download": hf_fd}):
+            processor._load_model("WhisperX", "tiny")
+        self.assertTrue(any(m.startswith("⏳ Downloading model.safetensors: 100%") for m in messages))
 
     def test_openai_weight_predownload_reports_progress(self):
         import io
