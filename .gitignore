@@ -162,7 +162,18 @@ model-weights/
 
 # macOS disk images
 *.dmg
-\n# Local Python/Conda envs\nretinaface-env/\nyolo-env/\n*-env/\n# macOS app bundles\n*.app/\n
+
+# Windows executables and installers
+*.exe
+*.msi
+
+# Downloaded CI build artifacts
+release-artifacts/
+
+# Local Python/Conda envs
+retinaface-env/
+yolo-env/
+*-env/
 
 download-latest-build.sh
 download-latest-build.sh
