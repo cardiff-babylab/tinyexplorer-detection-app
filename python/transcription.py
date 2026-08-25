@@ -51,6 +51,92 @@ class TranscriptionProcessor:
                          if n.lower().endswith(AUDIO_EXTENSIONS))
         return sorted(found)
 
+    def _emit_download_progress(self, name: str, downloaded: int, total: int,
+                                state: Dict[str, int]) -> None:
+        """Emit '⏳ Downloading <name>: NN%' lines (one per percent). The
+        renderer coalesces consecutive lines for the same name into a single
+        live-updating row, so this reads as a progress bar in the UI."""
+        if not total:
+            return
+        pct = int(downloaded * 100 / total)
+        if pct != state.get("last"):
+            state["last"] = pct
+            self._emit("⏳ Downloading %s: %d%% (%d/%d MB)"
+                       % (name, pct, downloaded // 1048576, total // 1048576))
+
+    def _ensure_openai_whisper_weights(self, model_name: str) -> None:
+        """Pre-download the OpenAI Whisper checkpoint with progress reporting.
+
+        whisper.load_model() downloads silently (tqdm on stderr); fetching the
+        file into whisper's cache first gives the UI real percentages. If the
+        cached file is corrupt, load_model's own sha256 check re-downloads it.
+        """
+        import urllib.request
+        import whisper
+        url = getattr(whisper, "_MODELS", {}).get(model_name)
+        if not url:
+            return
+        root = (os.environ.get("TINYEXPLORER_WHISPER_CACHE")
+                or os.path.join(os.path.expanduser("~"), ".cache", "whisper"))
+        target = os.path.join(root, os.path.basename(url))
+        if os.path.exists(target):
+            return
+        os.makedirs(root, exist_ok=True)
+        state: Dict[str, int] = {}
+        tmp = target + ".part"
+        with urllib.request.urlopen(url) as source, open(tmp, "wb") as out:
+            total = int(source.headers.get("Content-Length") or 0)
+            downloaded = 0
+            while True:
+                chunk = source.read(1 << 20)
+                if not chunk:
+                    break
+                out.write(chunk)
+                downloaded += len(chunk)
+                self._emit_download_progress("Whisper %s" % model_name, downloaded, total, state)
+        os.replace(tmp, target)
+
+    def _hf_download_progress(self, fallback_label: str):
+        """Context manager: while active, huggingface_hub downloads (faster-
+        whisper / whisperx / pyannote weights) report progress through _emit
+        instead of a terminal tqdm bar. Best-effort — if the hub internals
+        change, downloads simply stay silent as before."""
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _cm():
+            try:
+                import huggingface_hub.file_download as hf_fd
+                base = hf_fd.tqdm
+            except Exception:
+                yield
+                return
+            processor = self
+
+            class _EmitTqdm(base):  # type: ignore[misc, valid-type]
+                def update(self, n: int = 1):
+                    result = super().update(n)
+                    try:
+                        if self.total:
+                            name = getattr(self, "desc", "") or fallback_label
+                            if not hasattr(self, "_emit_state"):
+                                self._emit_state = {}
+                            processor._emit_download_progress(name, self.n, self.total, self._emit_state)
+                    except Exception:
+                        pass
+                    return result
+
+                def display(self, *args: Any, **kwargs: Any) -> None:
+                    pass  # keep the packaged app's stderr clean
+
+            hf_fd.tqdm = _EmitTqdm
+            try:
+                yield
+            finally:
+                hf_fd.tqdm = base
+
+        return _cm()
+
     @staticmethod
     def _device() -> str:
         return "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES", "") not in ("", "-1") else "cpu"
@@ -66,17 +152,20 @@ class TranscriptionProcessor:
         self._emit("🎤 Loading transcription model '%s' (first use may download model weights)..." % model_name)
         if variant == "Whisper (OpenAI)":
             import whisper
+            self._ensure_openai_whisper_weights(model_name)
             self._model = whisper.load_model(model_name)
         elif variant == "Faster Whisper":
             from faster_whisper import WhisperModel
             device = self._device()
             compute = "float16" if device == "cuda" else "int8"
-            self._model = WhisperModel(model_name, device=device, compute_type=compute)
+            with self._hf_download_progress("Faster Whisper %s" % model_name):
+                self._model = WhisperModel(model_name, device=device, compute_type=compute)
         elif variant == "WhisperX":
             import whisperx
             device = self._device()
-            self._model = whisperx.load_model(model_name, device=device,
-                                              compute_type="float16" if device == "cuda" else "int8")
+            with self._hf_download_progress("WhisperX %s" % model_name):
+                self._model = whisperx.load_model(model_name, device=device,
+                                                  compute_type="float16" if device == "cuda" else "int8")
             if not self._hf_token():
                 self._emit("ℹ️ Set TINYEXPLORER_HF_TOKEN (Hugging Face) to enable speaker diarization; "
                            "exporting without speaker labels.")
@@ -146,7 +235,8 @@ class TranscriptionProcessor:
         device = self._device()
         try:
             if self._align_cache is None or self._align_cache[0] != language:
-                model_a, metadata = whisperx.load_align_model(language_code=language, device=device)
+                with self._hf_download_progress("alignment model (%s)" % language):
+                    model_a, metadata = whisperx.load_align_model(language_code=language, device=device)
                 self._align_cache = (language, model_a, metadata)
             _, model_a, metadata = self._align_cache
             segments = whisperx.align(segments, model_a, metadata, audio, device).get("segments", segments)
@@ -162,7 +252,8 @@ class TranscriptionProcessor:
                 # to token; support both.
                 params = inspect.signature(DiarizationPipeline.__init__).parameters
                 token_kwarg = "token" if "token" in params else "use_auth_token"
-                self._diarizer = DiarizationPipeline(**{token_kwarg: self._hf_token(), "device": device})
+                with self._hf_download_progress("speaker diarization model"):
+                    self._diarizer = DiarizationPipeline(**{token_kwarg: self._hf_token(), "device": device})
             diarization = self._diarizer(audio)
             segments = assign_word_speakers(diarization, {"segments": segments}).get("segments", segments)
         except Exception as exc:

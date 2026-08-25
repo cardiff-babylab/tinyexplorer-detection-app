@@ -254,6 +254,45 @@ class BackendCallSignatureTests(unittest.TestCase):
         self.assertEqual(processor._model_variant, "WhisperX")
 
 
+class DownloadProgressTests(unittest.TestCase):
+    def test_openai_weight_predownload_reports_progress(self):
+        import io
+        import urllib.request
+
+        payload = b"x" * (2 * 1048576 + 512)
+
+        class _FakeResponse(io.BytesIO):
+            def __init__(self, data):
+                super().__init__(data)
+                self.headers = {"Content-Length": str(len(data))}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        mod = types.ModuleType("whisper")
+        mod._MODELS = {"base": "https://example.invalid/base.pt"}
+        messages = []
+        with tempfile.TemporaryDirectory() as temp:
+            processor = TranscriptionProcessor(progress_callback=messages.append)
+            with mock.patch.dict(sys.modules, {"whisper": mod}), \
+                    mock.patch.dict(os.environ, {"TINYEXPLORER_WHISPER_CACHE": temp}), \
+                    mock.patch.object(urllib.request, "urlopen", lambda url: _FakeResponse(payload)):
+                processor._ensure_openai_whisper_weights("base")
+                downloads = [m for m in messages if m.startswith("⏳ Downloading Whisper base:")]
+                self.assertTrue(downloads)
+                self.assertIn("100%", downloads[-1])
+                self.assertEqual((Path(temp) / "base.pt").read_bytes(), payload)
+
+                # Second call must hit the cache, not the network.
+                def _fail(url):
+                    raise AssertionError("network hit despite cached weights")
+                with mock.patch.object(urllib.request, "urlopen", _fail):
+                    processor._ensure_openai_whisper_weights("base")
+
+
 class LoadAudioTests(unittest.TestCase):
     """In-process decoding via PyAV — the packaged app has no ffmpeg binary."""
 
