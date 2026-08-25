@@ -66,13 +66,48 @@ class TranscriptionProcessor:
             raise ValueError("Unknown transcription model: %s" % variant)
         self._model_variant = variant
 
+    @staticmethod
+    def _load_audio(path: str) -> Any:
+        """Decode audio to the 16 kHz mono float32 array Whisper models expect.
+
+        openai-whisper's and whisperx's own load_audio() spawn an external
+        ffmpeg binary, which the packaged app does not ship. PyAV (already a
+        faster-whisper dependency) links the ffmpeg libraries directly, so
+        decoding works in-process everywhere.
+        """
+        import av
+        import numpy as np
+
+        chunks: List[Any] = []
+        with av.open(path) as container:
+            if not container.streams.audio:
+                raise ValueError("No audio stream found in %s" % path)
+            stream = container.streams.audio[0]
+            resampler = av.audio.resampler.AudioResampler(format="s16", layout="mono", rate=16000)
+            for frame in container.decode(stream):
+                chunks.extend(r.to_ndarray() for r in resampler.resample(frame))
+            chunks.extend(r.to_ndarray() for r in resampler.resample(None))
+        if not chunks:
+            return np.zeros(0, dtype=np.float32)
+        audio = np.concatenate([c.reshape(-1) for c in chunks])
+        return audio.astype(np.float32) / 32768.0
+
     def _transcribe(self, path: str, variant: str) -> Tuple[List[Dict[str, Any]], str]:
         if self._model_variant != variant or self._model is None:
             self._load_model(variant)
         if variant == "Faster Whisper":
             segments, info = self._model.transcribe(path, word_timestamps=True)
             return [self._segment_dict(s.start, s.end, s.text, getattr(s, "words", None)) for s in segments], getattr(info, "language", "unknown")
-        result = self._model.transcribe(path, word_timestamps=True, fp16=False)
+        if variant == "WhisperX":
+            # whisperx.load_model() returns a FasterWhisperPipeline whose
+            # transcribe() takes neither word_timestamps nor fp16; word-level
+            # times would need the separate whisperx.align() stage.
+            result = self._model.transcribe(
+                self._load_audio(path),
+                batch_size=int(os.environ.get("TINYEXPLORER_WHISPERX_BATCH", "8")))
+            return [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"))
+                    for s in result.get("segments", [])], result.get("language", "unknown")
+        result = self._model.transcribe(self._load_audio(path), word_timestamps=True, fp16=False)
         return [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"))
                 for s in result.get("segments", [])], result.get("language", "unknown")
 
