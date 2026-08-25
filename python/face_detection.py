@@ -540,10 +540,11 @@ class FaceDetectionProcessor:
                     })
 
             cap.release()
+            noun = self._modality_noun()
             face_pct = (frames_with_faces / processed_frames) * 100 if processed_frames else 0.0
             self._emit(
                 f"{_STATUS_SYMBOLS['complete']} Video processing complete. "
-                f"{frames_with_faces}/{processed_frames} frames with faces ({face_pct:.1f}%)"
+                f"{frames_with_faces}/{processed_frames} frames with {noun}s ({face_pct:.1f}%)"
             )
             if result_folder and frames_with_faces:
                 self._emit(
@@ -732,29 +733,23 @@ class FaceDetectionProcessor:
     ) -> bool:
         """Write one row per detected hand.
 
-        Schema mirrors the 100DOH prototype export — ``dataset, filename,
-        hand_id, hand_x1, hand_y1, hand_x2, hand_y2, Hand_confidence, state,
-        Hand_side, Owner_label, paired_obj_id, obj_x1, obj_y1, obj_x2, obj_y2,
-        obj_score`` — plus app convenience columns: ``frame_idx`` (empty for
-        image inputs), ``state_raw`` and ``state_label``.
+        Schema: ``dataset, filename, hand_id, hand_x1, hand_y1, hand_x2,
+        hand_y2, Hand_confidence, state, Hand_side, Owner_label`` plus app
+        convenience columns: ``frame_idx`` (empty for image inputs),
+        ``state_raw`` and ``state_label``.
 
-        ``state`` is the contact state AFTER hand-object pairing correction (this
-        is what matches the reference); ``state_raw`` is the model's uncorrected
-        argmax. The ``obj_*`` cells are blank and ``paired_obj_id`` is ``-1`` for
-        hands not paired with any object.
+        ``state`` is the contact state AFTER hand-object pairing correction
+        (this is what matches the reference); ``state_raw`` is the model's
+        uncorrected argmax. Paired objects still drive that correction but are
+        not reported as columns.
         """
         try:
             headers = [
                 "dataset", "filename", "hand_id",
                 "hand_x1", "hand_y1", "hand_x2", "hand_y2", "Hand_confidence",
                 "state", "Hand_side", "Owner_label",
-                "paired_obj_id", "obj_x1", "obj_y1", "obj_x2", "obj_y2", "obj_score",
                 "frame_idx", "state_raw", "state_label",
             ]
-            def _blank(v):
-                # unpaired hands carry None for the obj_* fields -> empty cell
-                return "" if v is None else v
-
             rows = []
             for det in results:
                 if det.get("_no_face") or det.get("x") is None:
@@ -771,10 +766,6 @@ class FaceDetectionProcessor:
                     det.get("state", ""),
                     det.get("side", ""),
                     det.get("owner", ""),
-                    det.get("paired_obj_id", -1),
-                    _blank(det.get("obj_x1")), _blank(det.get("obj_y1")),
-                    _blank(det.get("obj_x2")), _blank(det.get("obj_y2")),
-                    _blank(det.get("obj_score")),
                     "" if frame_idx is None else frame_idx,
                     det.get("state_raw", ""),
                     det.get("state_label", ""),
@@ -810,12 +801,15 @@ class FaceDetectionProcessor:
                 "n_state3_portable", "n_state4_furniture",
             ]
 
+            # Group by (path, frame_idx) BEFORE filtering out empty samples, so
+            # processed frames with zero hands still get a summary row.
             groups: Dict[Tuple[str, Optional[int]], List[Dict]] = {}
             for det in self.results:
+                key = (det["image_path"], det.get("frame_idx"))
+                dets = groups.setdefault(key, [])
                 if det.get("_no_face") or det.get("x") is None:
                     continue
-                key = (det["image_path"], det.get("frame_idx"))
-                groups.setdefault(key, []).append(det)
+                dets.append(det)
 
             def _summ(filename: str, frame_idx, img_w, img_h, dets: List[Dict]):
                 state_counts = {i: 0 for i in range(5)}
