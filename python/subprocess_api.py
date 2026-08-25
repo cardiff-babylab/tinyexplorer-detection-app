@@ -183,6 +183,13 @@ class SubprocessAPI:
                     
             elif cmd_type == 'start_processing':
                 try:
+                    # Personal Hugging Face token for gated diarization models.
+                    # Env-only handoff: popped before any further use of the
+                    # payload so it cannot reach logs or result files.
+                    hf_token = data.pop('hf_token', None)
+                    if hf_token:
+                        os.environ['TINYEXPLORER_HF_TOKEN'] = str(hf_token)
+
                     folder_path = data.get('folder_path')
                     confidence = data.get('confidence', 0.5)
                     model = data.get('model', 'yolov8n.pt')

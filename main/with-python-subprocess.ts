@@ -1,6 +1,6 @@
 import childProcess from "child_process";
 import crossSpawn from "cross-spawn";
-import Electron, { app, dialog, ipcMain } from "electron";
+import Electron, { app, dialog, ipcMain, safeStorage } from "electron";
 import fs from "fs";
 import * as path from "path";
 
@@ -549,7 +549,7 @@ const sendCommandToPython = async (command: any, callback?: Function) => {
     }
     
     if (!pyProc || !pythonReady) {
-        try { console.log("Python not ready, queuing command:", command); } catch (e) {}
+        try { console.log("Python not ready, queuing command:", redactCommand(command)); } catch (e) {}
         if (callback) {
             commandQueue.push({ command, callback });
         }
@@ -565,7 +565,7 @@ const sendCommandToPython = async (command: any, callback?: Function) => {
         if (pyProc.stdin) {
             pyProc.stdin.write(commandJson);
         }
-        try { console.log("Sent command to Python:", commandWithId); } catch (e) {}
+        try { console.log("Sent command to Python:", redactCommand(commandWithId)); } catch (e) {}
         
         if (callback) {
             // Store callback to be called when response arrives
@@ -579,20 +579,82 @@ const sendCommandToPython = async (command: any, callback?: Function) => {
     }
 };
 
+// --- Hugging Face token (speaker diarization) ----------------------------
+// The token is a personal credential for the gated pyannote models. It is
+// stored encrypted via Electron safeStorage (Keychain-backed key on macOS),
+// decrypted only in memory, attached to start_processing payloads for speech
+// models AFTER logging, and always redacted from logs and echoes.
+const TRANSCRIPTION_MODELS = ["Whisper (OpenAI)", "Faster Whisper", "WhisperX"];
+const hfTokenFile = () => path.join(app.getPath("userData"), "hf-token.enc");
+
+const getStoredHfToken = (): string => {
+    try {
+        if (!safeStorage.isEncryptionAvailable()) { return ""; }
+        return safeStorage.decryptString(fs.readFileSync(hfTokenFile()));
+    } catch (e) {
+        return "";
+    }
+};
+
+const getHfToken = (): string =>
+    process.env.TINYEXPLORER_HF_TOKEN || process.env.HF_TOKEN || getStoredHfToken();
+
+const redactCommand = (command: any): any => {
+    if (command && command.data && command.data.hf_token) {
+        return { ...command, data: { ...command.data, hf_token: "***" } };
+    }
+    return command;
+};
+
+ipcMain.handle("get-hf-token-status", () => {
+    const fromEnv = Boolean(process.env.TINYEXPLORER_HF_TOKEN || process.env.HF_TOKEN);
+    const stored = !fromEnv && Boolean(getStoredHfToken());
+    return {
+        present: fromEnv || stored,
+        source: fromEnv ? "env" : (stored ? "stored" : null),
+        canStore: safeStorage.isEncryptionAvailable(),
+    };
+});
+
+ipcMain.handle("set-hf-token", (event: any, token: any) => {
+    try {
+        if (!token || typeof token !== "string") {
+            try { fs.unlinkSync(hfTokenFile()); } catch (e) {}
+            return { ok: true, cleared: true };
+        }
+        if (!safeStorage.isEncryptionAvailable()) {
+            return { ok: false, message: "OS-level encryption is not available on this system" };
+        }
+        fs.writeFileSync(hfTokenFile(), safeStorage.encryptString(token), { mode: 0o600 });
+        return { ok: true };
+    } catch (e: any) {
+        return { ok: false, message: String((e && e.message) || e) };
+    }
+});
+
 // IPC handlers
 ipcMain.on("python-command", (event: any, command: any) => {
-    try { console.log("Received IPC command:", command); } catch (e) {}
-    
+    try { console.log("Received IPC command:", redactCommand(command)); } catch (e) {}
+
+    // Attach the token only after logging, and only for speech jobs.
+    if (command && command.type === "start_processing" && command.data &&
+            TRANSCRIPTION_MODELS.indexOf(command.data.model) !== -1) {
+        const hfToken = getHfToken();
+        if (hfToken) {
+            command = { ...command, data: { ...command.data, hf_token: hfToken } };
+        }
+    }
+
     sendCommandToPython(command, (error: any, response: any) => {
         if (error) {
-            event.sender.send("python-response", { 
+            event.sender.send("python-response", {
                 error: error.message,
-                command: command
+                command: redactCommand(command)
             });
         } else {
             event.sender.send("python-response", {
                 response: response,
-                command: command
+                command: redactCommand(command)
             });
         }
     });

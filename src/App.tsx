@@ -645,6 +645,48 @@ const App = () => {
         }
     }, [availableModels, detectorRegistry, modelModes]);
 
+    // Modal state for the speaker-diarization Hugging Face token. The token
+    // itself never lives in renderer state beyond the input field: it is sent
+    // to the main process for Keychain-backed storage and cleared immediately.
+    const [hfTokenModalOpen, setHfTokenModalOpen] = useState(false);
+    const [hfTokenInput, setHfTokenInput] = useState("");
+    const [hfTokenError, setHfTokenError] = useState("");
+    const [hfTokenPromptToStart, setHfTokenPromptToStart] = useState(false);
+
+    const closeHfTokenModal = () => {
+        setHfTokenModalOpen(false);
+        setHfTokenInput("");
+        setHfTokenError("");
+        setHfTokenPromptToStart(false);
+    };
+
+    const handleSaveHfToken = async () => {
+        const shouldStart = hfTokenPromptToStart;
+        try {
+            const result = await ipcRenderer.invoke("set-hf-token", hfTokenInput.trim());
+            if (result && result.ok) {
+                closeHfTokenModal();
+                if (shouldStart) startProcessingNow();
+            } else {
+                setHfTokenError((result && result.message) || "Could not store the token");
+            }
+        } catch (error) {
+            setHfTokenError(String(error));
+        }
+    };
+
+    const handleSkipHfToken = () => {
+        const shouldStart = hfTokenPromptToStart;
+        closeHfTokenModal();
+        if (shouldStart) startProcessingNow();
+    };
+
+    const handleOpenHfTokenHelp = () => {
+        if (ipcRenderer && typeof ipcRenderer.invoke === "function") {
+            ipcRenderer.invoke("open-external", "https://huggingface.co/settings/tokens");
+        }
+    };
+
     const handleStartProcessing = async () => {
         console.log(selectedMode === "speech" ? "User clicked 'Start Transcription' button" : "User clicked 'Start Detection' button");
         console.log("Processing parameters:", {
@@ -653,15 +695,35 @@ const App = () => {
             confidence: confidenceThreshold,
             resultsFolder: resultsFolder
         });
-        
+
         if (!selectedFolder || !pythonReady) return;
-        
+
         if (!resultsFolder) {
             console.log("No results folder selected, prompting user");
             handleSelectResultsFolder();
             return;
         }
-        
+
+        // WhisperX can label speakers, but only with a (gated-model) Hugging
+        // Face token. If none is configured anywhere, ask once before running.
+        if (selectedMode === "speech" && selectedModel === "WhisperX" &&
+                ipcRenderer && typeof ipcRenderer.invoke === "function") {
+            try {
+                const status = await ipcRenderer.invoke("get-hf-token-status");
+                if (status && status.present === false) {
+                    setHfTokenPromptToStart(true);
+                    setHfTokenModalOpen(true);
+                    return;
+                }
+            } catch (error) {
+                console.warn("[FALLBACK] HF token status check failed; starting without speaker diarization:", error);
+            }
+        }
+
+        startProcessingNow();
+    };
+
+    const startProcessingNow = async () => {
         setIsStarting(true);
         setResults([]);
         setProgress(0);
@@ -759,6 +821,55 @@ const App = () => {
 
     return (
         <div className="App">
+            {hfTokenModalOpen && (
+                <div className="modal-overlay">
+                    <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="hf-token-title">
+                        <h3 id="hf-token-title">
+                            <span role="img" aria-label="key">🔑</span> Hugging Face token for speaker labels
+                        </h3>
+                        <p>
+                            WhisperX can tag each utterance and word with a speaker
+                            (SPEAKER_00, SPEAKER_01, …), but the diarization model is
+                            gated: it needs your personal Hugging Face token, and your
+                            account must have accepted the pyannote model terms.
+                        </p>
+                        <p>
+                            The token is stored encrypted with your macOS Keychain and
+                            never written to disk in plain text.{" "}
+                            <button type="button" className="hf-token-link" onClick={handleOpenHfTokenHelp}>
+                                Get a token
+                            </button>
+                        </p>
+                        <input
+                            type="password"
+                            className="hf-token-input"
+                            placeholder="hf_..."
+                            value={hfTokenInput}
+                            onChange={(e) => setHfTokenInput(e.target.value)}
+                            autoFocus
+                        />
+                        {hfTokenError && <div className="hf-token-error">{hfTokenError}</div>}
+                        <div className="modal-actions">
+                            <button type="button" className="browse-btn" onClick={closeHfTokenModal}>
+                                Cancel
+                            </button>
+                            {hfTokenPromptToStart && (
+                                <button type="button" className="browse-btn" onClick={handleSkipHfToken}>
+                                    Continue without speakers
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                className="start-btn modal-save-btn"
+                                onClick={handleSaveHfToken}
+                                disabled={!hfTokenInput.trim()}
+                            >
+                                {hfTokenPromptToStart ? "Save & Continue" : "Save"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {updateInfo && updateInfo.updateAvailable && !updateBannerDismissed && (
                 <div className="update-banner" role="status">
                     <span className="update-banner-text">
@@ -890,6 +1001,16 @@ const App = () => {
                                 ));
                             })()}
                         </select>
+                        {selectedMode === "speech" && selectedModel === "WhisperX" && (
+                            <button
+                                type="button"
+                                className="hf-token-link"
+                                onClick={() => setHfTokenModalOpen(true)}
+                                title="Configure the Hugging Face token used for speaker diarization"
+                            >
+                                <span role="img" aria-label="key">🔑</span> Speaker diarization token…
+                            </button>
+                        )}
                     </div>
 
                     {selectedMode !== "speech" && (

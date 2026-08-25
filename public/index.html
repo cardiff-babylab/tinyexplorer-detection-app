@@ -84,6 +84,19 @@
                             if (typeof data === "string") window.open(data, "_blank");
                             return Promise.resolve(true);
                         }
+                        // In-memory HF token store so the web harness can
+                        // exercise the diarization-token dialog end to end.
+                        if (channel === "get-hf-token-status") {
+                            return Promise.resolve({
+                                present: !!this._hfToken,
+                                source: this._hfToken ? "stored" : null,
+                                canStore: true
+                            });
+                        }
+                        if (channel === "set-hf-token") {
+                            this._hfToken = (typeof data === "string" && data) ? data : null;
+                            return Promise.resolve({ ok: true, cleared: !this._hfToken });
+                        }
                         return Promise.resolve(null);
                     },
                     send: function(channel, data) {
