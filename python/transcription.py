@@ -261,6 +261,7 @@ class TranscriptionProcessor:
     def _transcribe(self, path: str, variant: str, size: Optional[str] = None) -> Tuple[List[Dict[str, Any]], str]:
         if self._model_variant != variant or self._model_size != size or self._model is None:
             self._load_model(variant, size)
+        self._emit("🎤 Running speech recognition (may take a while for long recordings)...")
         if variant == "Faster Whisper":
             segments, info = self._model.transcribe(path, word_timestamps=True)
             return [self._segment_dict(s.start, s.end, s.text, getattr(s, "words", None)) for s in segments], getattr(info, "language", "unknown")
@@ -297,6 +298,7 @@ class TranscriptionProcessor:
                     model_a, metadata = whisperx.load_align_model(language_code=language, device=device)
                 self._align_cache = (language, model_a, metadata)
             _, model_a, metadata = self._align_cache
+            self._emit("📐 Aligning word-level timestamps...")
             segments = whisperx.align(segments, model_a, metadata, audio, device).get("segments", segments)
         except Exception as exc:
             self._emit("⚠️ Word alignment unavailable (%s); exporting utterance-level output only." % exc)
@@ -317,6 +319,7 @@ class TranscriptionProcessor:
                 override = os.environ.get("TINYEXPLORER_DIARIZATION_MODEL")
                 if override:
                     candidates.insert(0, override)
+                self._emit("🗣️ Loading speaker diarization model (first use downloads weights)...")
                 last_error: Optional[Exception] = None
                 for model_name in candidates:
                     kwargs: Dict[str, Any] = {token_kwarg: self._hf_token(), "device": device}
@@ -332,6 +335,7 @@ class TranscriptionProcessor:
                                    % (model_name or "(whisperx default)"))
                 if self._diarizer is None and last_error is not None:
                     raise last_error
+            self._emit("🗣️ Identifying speakers (can take several minutes on CPU)...")
             diarization = self._diarizer(audio)
             segments = assign_word_speakers(diarization, {"segments": segments}).get("segments", segments)
         except Exception as exc:
