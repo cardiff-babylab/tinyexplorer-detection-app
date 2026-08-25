@@ -275,6 +275,41 @@ class BackendCallSignatureTests(unittest.TestCase):
 
 
 class DownloadProgressTests(unittest.TestCase):
+    def test_hf_hook_covers_progress_bar_context_hub_036(self):
+        """huggingface_hub >= 0.36 (incl. the xet transport) builds bars via
+        file_download._get_progress_bar_context — the hook must intercept it."""
+        hf_pkg = types.ModuleType("huggingface_hub")
+        hf_fd = types.ModuleType("huggingface_hub.file_download")
+
+        def _real_context(*, desc, log_level=0, total=None, initial=0,
+                          unit="B", unit_scale=True, name=None, _tqdm_bar=None):
+            raise AssertionError("original progress context should be bypassed")
+
+        hf_fd._get_progress_bar_context = _real_context
+        hf_pkg.file_download = hf_fd
+        messages = []
+        processor = TranscriptionProcessor(progress_callback=messages.append)
+        with mock.patch.dict(sys.modules, {"huggingface_hub": hf_pkg,
+                                           "huggingface_hub.file_download": hf_fd}):
+            with processor._hf_download_progress("test model"):
+                # Mirror hub 0.36's real flow: the bar is created before the
+                # response (total unknown), then handed back via _tqdm_bar
+                # together with the real size once headers arrive.
+                with hf_fd._get_progress_bar_context(
+                        desc="model.bin", log_level=0, total=None,
+                        name="huggingface_hub.http_get") as outer:
+                    with hf_fd._get_progress_bar_context(
+                            desc="model.bin", log_level=0, total=4 * 1048576,
+                            name="huggingface_hub.http_get", _tqdm_bar=outer) as bar:
+                        bar.update(2 * 1048576)
+                        bar.update(2 * 1048576)
+            # Restored afterwards.
+            self.assertIs(hf_fd._get_progress_bar_context, _real_context)
+        downloads = [m for m in messages if m.startswith("⏳ Downloading model.bin:")]
+        self.assertTrue(downloads)
+        self.assertIn("50%", downloads[0])
+        self.assertIn("100%", downloads[-1])
+
     def test_openai_weight_predownload_reports_progress(self):
         import io
         import urllib.request

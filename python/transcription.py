@@ -55,14 +55,21 @@ class TranscriptionProcessor:
                                 state: Dict[str, int]) -> None:
         """Emit '⏳ Downloading <name>: NN%' lines (one per percent). The
         renderer coalesces consecutive lines for the same name into a single
-        live-updating row, so this reads as a progress bar in the UI."""
-        if not total:
-            return
-        pct = int(downloaded * 100 / total)
-        if pct != state.get("last"):
-            state["last"] = pct
-            self._emit("⏳ Downloading %s: %d%% (%d/%d MB)"
-                       % (name, pct, downloaded // 1048576, total // 1048576))
+        live-updating row, so this reads as a progress bar in the UI. When the
+        size is unknown, fall back to a line every 25 MB so long downloads
+        still visibly move."""
+        if total:
+            pct = int(downloaded * 100 / total)
+            if pct != state.get("last"):
+                state["last"] = pct
+                self._emit("⏳ Downloading %s: %d%% (%d/%d MB)"
+                           % (name, pct, downloaded // 1048576, total // 1048576))
+        elif downloaded > 0:
+            bucket = downloaded // (25 * 1048576)
+            if bucket != state.get("last_bucket"):
+                state["last_bucket"] = bucket
+                self._emit("⏳ Downloading %s: %d MB so far (total size unknown)"
+                           % (name, downloaded // 1048576))
 
     def _ensure_openai_whisper_weights(self, model_name: str) -> None:
         """Pre-download the OpenAI Whisper checkpoint with progress reporting.
@@ -99,41 +106,92 @@ class TranscriptionProcessor:
     def _hf_download_progress(self, fallback_label: str):
         """Context manager: while active, huggingface_hub downloads (faster-
         whisper / whisperx / pyannote weights) report progress through _emit
-        instead of a terminal tqdm bar. Best-effort — if the hub internals
-        change, downloads simply stay silent as before."""
+        instead of a terminal tqdm bar. Hub >= 0.36 builds its bars via
+        file_download._get_progress_bar_context for BOTH the plain-http and
+        xet transports, so that is the primary patch point; the module-level
+        tqdm swap covers older hubs. Best-effort — if the hub internals
+        change again, downloads simply stay silent as before."""
         from contextlib import contextmanager
 
         @contextmanager
         def _cm():
             try:
                 import huggingface_hub.file_download as hf_fd
-                base = hf_fd.tqdm
             except Exception:
                 yield
                 return
             processor = self
 
-            class _EmitTqdm(base):  # type: ignore[misc, valid-type]
-                def update(self, n: int = 1):
-                    result = super().update(n)
-                    try:
-                        if self.total:
-                            name = getattr(self, "desc", "") or fallback_label
-                            if not hasattr(self, "_emit_state"):
-                                self._emit_state = {}
-                            processor._emit_download_progress(name, self.n, self.total, self._emit_state)
-                    except Exception:
-                        pass
-                    return result
+            class _EmitBar:
+                """Minimal tqdm stand-in: counts bytes, emits app progress."""
 
-                def display(self, *args: Any, **kwargs: Any) -> None:
-                    pass  # keep the packaged app's stderr clean
+                def __init__(self, desc: Any, total: Any, initial: Any = 0):
+                    self.desc = str(desc) if desc else fallback_label
+                    self.total = int(total or 0)
+                    self.n = int(initial or 0)
+                    self._state: Dict[str, int] = {}
 
-            hf_fd.tqdm = _EmitTqdm
+                def update(self, n: int = 1) -> None:
+                    self.n += int(n or 0)
+                    processor._emit_download_progress(self.desc, self.n, self.total, self._state)
+
+                def __enter__(self) -> "_EmitBar":
+                    return self
+
+                def __exit__(self, *args: Any) -> bool:
+                    return False
+
+                def close(self) -> None: pass
+                def refresh(self) -> None: pass
+                def set_description(self, *args: Any, **kwargs: Any) -> None: pass
+
+            originals: Dict[str, Any] = {}
+
+            if hasattr(hf_fd, "_get_progress_bar_context"):
+                originals["_get_progress_bar_context"] = hf_fd._get_progress_bar_context
+
+                def _emitting_context(*args: Any, **kwargs: Any) -> Any:
+                    existing = kwargs.get("_tqdm_bar")
+                    if isinstance(existing, _EmitBar):
+                        # The hub creates the bar before the response arrives
+                        # (total unknown) and passes it back here with the real
+                        # size once headers are in — adopt it.
+                        if kwargs.get("total"):
+                            existing.total = int(kwargs["total"])
+                        return existing
+                    if existing is not None:
+                        return originals["_get_progress_bar_context"](*args, **kwargs)
+                    return _EmitBar(kwargs.get("desc", ""), kwargs.get("total"), kwargs.get("initial", 0))
+
+                hf_fd._get_progress_bar_context = _emitting_context
+
+            if hasattr(hf_fd, "tqdm"):
+                base = hf_fd.tqdm
+                originals["tqdm"] = base
+
+                class _EmitTqdm(base):  # type: ignore[misc, valid-type]
+                    def update(self, n: int = 1):
+                        result = super().update(n)
+                        try:
+                            if self.total:
+                                name = getattr(self, "desc", "") or fallback_label
+                                if not hasattr(self, "_emit_state"):
+                                    self._emit_state = {}
+                                processor._emit_download_progress(name, self.n, self.total, self._emit_state)
+                        except Exception:
+                            pass
+                        return result
+
+                    def display(self, *args: Any, **kwargs: Any) -> None:
+                        pass  # keep the packaged app's stderr clean
+
+                hf_fd.tqdm = _EmitTqdm
+
             try:
                 yield
             finally:
-                hf_fd.tqdm = base
+                for attr, value in originals.items():
+                    setattr(hf_fd, attr, value)
 
         return _cm()
 
