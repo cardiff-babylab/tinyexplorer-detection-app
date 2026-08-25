@@ -425,11 +425,6 @@ const App = () => {
                     console.log("User selected folder:", sel.path);
                     setSelectedFolder(sel.path);
                     setIsVideoFile(false);
-
-                    // Prompt for results folder
-                    setTimeout(() => {
-                        handleSelectResultsFolder();
-                    }, 100);
                 }
             });
         }
@@ -451,11 +446,6 @@ const App = () => {
                     const isVideo = videoExtensions.some(ext => sel.path.toLowerCase().endsWith(ext));
                     setIsVideoFile(isVideo);
                     console.log("Video file detected:", isVideo);
-
-                    // Prompt for results folder
-                    setTimeout(() => {
-                        handleSelectResultsFolder();
-                    }, 100);
                 }
             });
         }
@@ -1103,7 +1093,7 @@ const App = () => {
                         {!isProcessing && !isStarting ? (
                             <button 
                                 onClick={handleStartProcessing}
-                                disabled={!selectedFolder || !pythonReady}
+                                disabled={!selectedFolder || !resultsFolder || !pythonReady}
                                 className="start-btn"
                             >
                                 {selectedMode === "speech" ? "Start Transcription" : "Start Detection"}
