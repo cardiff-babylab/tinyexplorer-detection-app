@@ -252,12 +252,34 @@ class TranscriptionProcessor:
                 # to token; support both.
                 params = inspect.signature(DiarizationPipeline.__init__).parameters
                 token_kwarg = "token" if "token" in params else "use_auth_token"
-                with self._hf_download_progress("speaker diarization model"):
-                    self._diarizer = DiarizationPipeline(**{token_kwarg: self._hf_token(), "device": device})
+                # HF accounts are gated per model. Try, in order: an explicit
+                # override, the whisperx default (community-1 on 3.8+), and the
+                # older 3.1 pipeline many existing accounts are approved for.
+                candidates: List[Optional[str]] = [None, "pyannote/speaker-diarization-3.1"]
+                override = os.environ.get("TINYEXPLORER_DIARIZATION_MODEL")
+                if override:
+                    candidates.insert(0, override)
+                last_error: Optional[Exception] = None
+                for model_name in candidates:
+                    kwargs: Dict[str, Any] = {token_kwarg: self._hf_token(), "device": device}
+                    if model_name:
+                        kwargs["model_name"] = model_name
+                    try:
+                        with self._hf_download_progress("speaker diarization model"):
+                            self._diarizer = DiarizationPipeline(**kwargs)
+                        break
+                    except Exception as exc:
+                        last_error = exc
+                        self._emit("⚠️ Diarization model %s not accessible; trying the next option..."
+                                   % (model_name or "(whisperx default)"))
+                if self._diarizer is None and last_error is not None:
+                    raise last_error
             diarization = self._diarizer(audio)
             segments = assign_word_speakers(diarization, {"segments": segments}).get("segments", segments)
         except Exception as exc:
-            self._emit("⚠️ Speaker diarization unavailable (%s); speaker column left empty." % exc)
+            self._emit("⚠️ Speaker diarization unavailable (%s); speaker column left empty. "
+                       "If this is a gated-repo error, request access to the model on "
+                       "huggingface.co with the account that issued your token." % exc)
         return segments
 
     @staticmethod

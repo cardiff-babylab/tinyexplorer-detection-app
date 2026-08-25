@@ -216,6 +216,26 @@ class BackendCallSignatureTests(unittest.TestCase):
         self.assertEqual(segments[0]["words"][0]["speaker"], "SPEAKER_00")
         self.assertEqual(segments[0]["words"][0]["probability"], 0.9)
 
+    def test_whisperx_diarization_falls_back_to_legacy_gated_model(self):
+        mod, diarize_mod = _fake_whisperx_with_diarization()
+        original_pipeline = diarize_mod.DiarizationPipeline
+
+        class _GatedDefaultPipeline(original_pipeline):
+            def __init__(self, model_name=None, token=None, device="cpu", cache_dir=None):
+                if model_name is None:
+                    raise RuntimeError("403 Client Error: gated repo")
+                super().__init__(model_name=model_name, token=token, device=device, cache_dir=cache_dir)
+
+        diarize_mod.DiarizationPipeline = _GatedDefaultPipeline
+        processor = TranscriptionProcessor()
+        with mock.patch.dict(sys.modules, {"whisperx": mod, "whisperx.diarize": diarize_mod}), \
+                mock.patch.dict(os.environ, {"TINYEXPLORER_HF_TOKEN": "hf_test"}), \
+                mock.patch.object(TranscriptionProcessor, "_load_audio",
+                                  staticmethod(lambda path: [0.0] * 16000)):
+            segments, _ = processor._transcribe("sample.wav", "WhisperX")
+        # Default model 403s; the pyannote 3.1 fallback still yields speakers.
+        self.assertEqual(segments[0]["speaker"], "SPEAKER_00")
+
     def test_model_size_is_passed_to_backend_and_triggers_reload(self):
         loaded_sizes = []
         mod = types.ModuleType("whisper")
