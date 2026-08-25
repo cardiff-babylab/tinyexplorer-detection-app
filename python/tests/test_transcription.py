@@ -12,7 +12,14 @@ from transcription import TRANSCRIPTION_VARIANTS, TranscriptionProcessor
 
 class FakeTranscriptionProcessor(TranscriptionProcessor):
     def _transcribe(self, path, variant):
-        return [{"start": 0.0, "end": 1.25, "text": "hello world", "words": []}], "en"
+        return [{
+            "start": 0.0, "end": 1.25, "text": "hello world", "speaker": "SPEAKER_00",
+            "words": [
+                {"word": "hello", "start": 0.0, "end": 0.5, "probability": 0.91, "speaker": "SPEAKER_00"},
+                # No word-level speaker: the export must fall back to the segment's.
+                {"word": "world", "start": 0.6, "end": 1.25, "probability": 0.874999, "speaker": None},
+            ],
+        }], "en"
 
 
 class TranscriptionTests(unittest.TestCase):
@@ -35,20 +42,59 @@ class TranscriptionTests(unittest.TestCase):
                 rows[0].keys(),
                 {
                     "id", "frame_idx", "filename", "mode", "start", "end",
-                    "label", "confidence", "model", "text", "language",
+                    "label", "confidence", "model", "text", "language", "speaker",
                 },
             )
             self.assertEqual(rows[0]["filename"], "sample.wav")
             self.assertEqual(rows[0]["mode"], "speech")
             self.assertEqual(rows[0]["label"], "speech")
             self.assertEqual(rows[0]["model"], "Faster Whisper")
+            self.assertEqual(rows[0]["speaker"], "SPEAKER_00")
             self.assertTrue((result_dirs[0] / "detections.csv").exists())
             self.assertTrue((result_dirs[0] / "summary.csv").exists())
             with (result_dirs[0] / "summary.csv").open(newline="", encoding="utf-8") as handle:
                 summary_rows = list(csv.DictReader(handle))
             self.assertEqual(summary_rows[0]["segments"], "1")
             self.assertEqual(summary_rows[0]["type"], "audio")
-            self.assertIn("[0.00-1.25] hello world", (result_dirs[0] / "sample_transcript.txt").read_text())
+            self.assertIn("[0.00-1.25] SPEAKER_00: hello world",
+                          (result_dirs[0] / "sample_transcript.txt").read_text())
+
+    def test_writes_word_level_csv_with_speaker_fallback(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "sample.wav"
+            source.write_bytes(b"not decoded by fake backend")
+            output = Path(temp) / "results"
+            processor = FakeTranscriptionProcessor()
+            processor.process(str(source), "WhisperX", str(output))
+            result_dir = next(output.glob("transcription_results_*"))
+            with (result_dir / "sample_words.csv").open(newline="", encoding="utf-8") as handle:
+                words = list(csv.DictReader(handle))
+        self.assertEqual(
+            list(words[0].keys()),
+            ["word", "start", "end", "speaker", "word_score",
+             "segment_start", "segment_end", "segment_text"],
+        )
+        self.assertEqual(words[0]["word"], "hello")
+        self.assertEqual(words[0]["speaker"], "SPEAKER_00")
+        self.assertEqual(words[0]["word_score"], "0.91")
+        # Word without its own speaker inherits the segment speaker.
+        self.assertEqual(words[1]["speaker"], "SPEAKER_00")
+        self.assertEqual(words[1]["word_score"], "0.875")
+        self.assertEqual(words[1]["segment_text"], "hello world")
+
+    def test_no_words_csv_when_backend_has_no_word_output(self):
+        class UtteranceOnlyProcessor(TranscriptionProcessor):
+            def _transcribe(self, path, variant):
+                return [{"start": 0.0, "end": 1.0, "text": "hi", "words": [], "speaker": ""}], "en"
+
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "sample.wav"
+            source.write_bytes(b"fake")
+            output = Path(temp) / "results"
+            UtteranceOnlyProcessor().process(str(source), "WhisperX", str(output))
+            result_dir = next(output.glob("transcription_results_*"))
+            self.assertFalse((result_dir / "sample_words.csv").exists())
+            self.assertIn("[0.00-1.00] hi", (result_dir / "sample_transcript.txt").read_text())
 
 
 def _fake_whisper_module():

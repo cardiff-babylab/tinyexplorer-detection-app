@@ -28,6 +28,10 @@ class TranscriptionProcessor:
         self._stop = threading.Event()
         self._model: Any = None
         self._model_variant: Optional[str] = None
+        # WhisperX extras, cached across files: (language, model, metadata) and
+        # the pyannote diarization pipeline.
+        self._align_cache: Optional[Tuple[str, Any, Any]] = None
+        self._diarizer: Any = None
 
     def _emit(self, message: str) -> None:
         if self.progress_callback:
@@ -46,6 +50,14 @@ class TranscriptionProcessor:
                          if n.lower().endswith(AUDIO_EXTENSIONS))
         return sorted(found)
 
+    @staticmethod
+    def _device() -> str:
+        return "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES", "") not in ("", "-1") else "cpu"
+
+    @staticmethod
+    def _hf_token() -> str:
+        return os.environ.get("TINYEXPLORER_HF_TOKEN") or os.environ.get("HF_TOKEN") or ""
+
     def _load_model(self, variant: str) -> None:
         self._emit("🎤 Loading transcription model (first use may download model weights)...")
         if variant == "Whisper (OpenAI)":
@@ -54,14 +66,17 @@ class TranscriptionProcessor:
         elif variant == "Faster Whisper":
             from faster_whisper import WhisperModel
             model_name = os.environ.get("TINYEXPLORER_WHISPER_MODEL", "base")
-            device = "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES", "") not in ("", "-1") else "cpu"
+            device = self._device()
             compute = "float16" if device == "cuda" else "int8"
             self._model = WhisperModel(model_name, device=device, compute_type=compute)
         elif variant == "WhisperX":
             import whisperx
-            device = "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES", "") not in ("", "-1") else "cpu"
+            device = self._device()
             self._model = whisperx.load_model(os.environ.get("TINYEXPLORER_WHISPER_MODEL", "base"), device=device,
                                               compute_type="float16" if device == "cuda" else "int8")
+            if not self._hf_token():
+                self._emit("ℹ️ Set TINYEXPLORER_HF_TOKEN (Hugging Face) to enable speaker diarization; "
+                           "exporting without speaker labels.")
         else:
             raise ValueError("Unknown transcription model: %s" % variant)
         self._model_variant = variant
@@ -100,28 +115,66 @@ class TranscriptionProcessor:
             return [self._segment_dict(s.start, s.end, s.text, getattr(s, "words", None)) for s in segments], getattr(info, "language", "unknown")
         if variant == "WhisperX":
             # whisperx.load_model() returns a FasterWhisperPipeline whose
-            # transcribe() takes neither word_timestamps nor fp16; word-level
-            # times would need the separate whisperx.align() stage.
+            # transcribe() takes neither word_timestamps nor fp16. Word-level
+            # times come from the separate align() stage, speaker labels from
+            # the diarization stage — both are best-effort extras.
+            audio = self._load_audio(path)
             result = self._model.transcribe(
-                self._load_audio(path),
-                batch_size=int(os.environ.get("TINYEXPLORER_WHISPERX_BATCH", "8")))
-            return [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"))
-                    for s in result.get("segments", [])], result.get("language", "unknown")
+                audio, batch_size=int(os.environ.get("TINYEXPLORER_WHISPERX_BATCH", "8")))
+            language = result.get("language", "unknown")
+            segments = self._whisperx_enrich(result.get("segments", []), audio, language)
+            return [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"),
+                                       s.get("speaker"))
+                    for s in segments], language
         result = self._model.transcribe(self._load_audio(path), word_timestamps=True, fp16=False)
-        return [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"))
+        return [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"),
+                                   s.get("speaker"))
                 for s in result.get("segments", [])], result.get("language", "unknown")
 
+    def _whisperx_enrich(self, segments: List[Dict[str, Any]], audio: Any, language: str) -> List[Dict[str, Any]]:
+        """Best-effort word alignment + speaker diarization for WhisperX.
+
+        Either stage failing (missing alignment model for the language, no
+        Hugging Face token for the gated pyannote weights, offline, ...) must
+        degrade to the plain segment output rather than fail the run.
+        """
+        import whisperx
+        device = self._device()
+        try:
+            if self._align_cache is None or self._align_cache[0] != language:
+                model_a, metadata = whisperx.load_align_model(language_code=language, device=device)
+                self._align_cache = (language, model_a, metadata)
+            _, model_a, metadata = self._align_cache
+            segments = whisperx.align(segments, model_a, metadata, audio, device).get("segments", segments)
+        except Exception as exc:
+            self._emit("⚠️ Word alignment unavailable (%s); exporting utterance-level output only." % exc)
+        if not self._hf_token():
+            return segments
+        try:
+            from whisperx.diarize import DiarizationPipeline, assign_word_speakers
+            if self._diarizer is None:
+                self._diarizer = DiarizationPipeline(use_auth_token=self._hf_token(), device=device)
+            diarization = self._diarizer(audio)
+            segments = assign_word_speakers(diarization, {"segments": segments}).get("segments", segments)
+        except Exception as exc:
+            self._emit("⚠️ Speaker diarization unavailable (%s); speaker column left empty." % exc)
+        return segments
+
     @staticmethod
-    def _segment_dict(start: Any, end: Any, text: Any, words: Any) -> Dict[str, Any]:
+    def _segment_dict(start: Any, end: Any, text: Any, words: Any, speaker: Any = None) -> Dict[str, Any]:
         out_words = []
         for word in words or []:
             if isinstance(word, dict):
+                # whisperx aligned words carry "score" instead of "probability".
                 out_words.append({"word": word.get("word"), "start": word.get("start"), "end": word.get("end"),
-                                  "probability": word.get("probability", word.get("prob"))})
+                                  "probability": word.get("probability", word.get("prob", word.get("score"))),
+                                  "speaker": word.get("speaker")})
             else:
                 out_words.append({"word": getattr(word, "word", ""), "start": getattr(word, "start", None),
-                                  "end": getattr(word, "end", None), "probability": getattr(word, "probability", None)})
-        return {"start": float(start or 0), "end": float(end or 0), "text": str(text or "").strip(), "words": out_words}
+                                  "end": getattr(word, "end", None), "probability": getattr(word, "probability", None),
+                                  "speaker": getattr(word, "speaker", None)})
+        return {"start": float(start or 0), "end": float(end or 0), "text": str(text or "").strip(),
+                "words": out_words, "speaker": str(speaker) if speaker else ""}
 
     def process(self, source: str, variant: str, results_folder: str) -> None:
         self.is_processing = True
@@ -133,7 +186,11 @@ class TranscriptionProcessor:
         files = self._files(source)
         shared_headers = [
             "id", "frame_idx", "filename", "mode", "start", "end",
-            "label", "confidence", "model", "text", "language",
+            "label", "confidence", "model", "text", "language", "speaker",
+        ]
+        word_headers = [
+            "word", "start", "end", "speaker", "word_score",
+            "segment_start", "segment_end", "segment_text",
         ]
         shared_rows: List[List[Any]] = []
         summary_rows: List[List[Any]] = []
@@ -163,16 +220,31 @@ class TranscriptionProcessor:
                             row = [
                                 segment_id, "", os.path.basename(path), "speech",
                                 segment["start"], segment["end"], "speech", "", variant,
-                                segment["text"], language,
+                                segment["text"], language, segment.get("speaker", ""),
                             ]
                             writer.writerow(row)
                             file_rows.append(row)
                             shared_rows.append(row)
                             self.results.append(dict(segment, audio_path=path, language=language, model=variant))
+                word_rows = [
+                    [word.get("word"), word.get("start"), word.get("end"),
+                     word.get("speaker") or segment.get("speaker", ""),
+                     round(float(word["probability"]), 3) if word.get("probability") is not None else "",
+                     segment["start"], segment["end"], segment["text"]]
+                    for segment in segments if segment["text"]
+                    for word in segment.get("words") or []
+                ]
+                if word_rows:
+                    with open(os.path.join(output, stem + "_words.csv"), "w", newline="", encoding="utf-8") as handle:
+                        writer = csv.writer(handle)
+                        writer.writerow(word_headers)
+                        writer.writerows(word_rows)
                 with open(txt_path, "w", encoding="utf-8") as handle:
                     for segment in segments:
                         if segment["text"]:
-                            handle.write("[%0.2f-%0.2f] %s\n" % (segment["start"], segment["end"], segment["text"]))
+                            prefix = ("%s: " % segment["speaker"]) if segment.get("speaker") else ""
+                            handle.write("[%0.2f-%0.2f] %s%s\n" % (segment["start"], segment["end"],
+                                                                   prefix, segment["text"]))
                 summary_rows.append([
                     path,
                     "audio",
