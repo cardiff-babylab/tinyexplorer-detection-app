@@ -1040,12 +1040,6 @@ const App = () => {
                                     <option key={size} value={size}>{size}</option>
                                 ))}
                             </select>
-                            <div className="file-info">
-                                <small>
-                                    Larger models transcribe more accurately but run slower;
-                                    the first use of a size downloads its weights (~3&nbsp;GB for large).
-                                </small>
-                            </div>
                         </div>
                     )}
 
