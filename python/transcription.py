@@ -224,11 +224,11 @@ class TranscriptionProcessor:
             with self._hf_download_progress("WhisperX %s" % model_name):
                 self._model = whisperx.load_model(model_name, device=device,
                                                   compute_type="float16" if device == "cuda" else "int8")
-            if not self._hf_token():
-                self._emit("ℹ️ Set TINYEXPLORER_HF_TOKEN (Hugging Face) to enable speaker diarization; "
-                           "exporting without speaker labels.")
         else:
             raise ValueError("Unknown transcription model: %s" % variant)
+        if not self._hf_token():
+            self._emit("ℹ️ Set a Hugging Face token (🔑 in the app, or TINYEXPLORER_HF_TOKEN) to "
+                       "enable speaker diarization; exporting without speaker labels.")
         self._model_variant = variant
         self._model_size = size
 
@@ -263,10 +263,13 @@ class TranscriptionProcessor:
             self._load_model(variant, size)
         self._emit("🎤 Running speech recognition (may take a while for long recordings)...")
         if variant == "Faster Whisper":
-            segments, info = self._model.transcribe(path, word_timestamps=True)
-            return [self._segment_dict(s.start, s.end, s.text, getattr(s, "words", None),
-                                       confidence=getattr(s, "avg_logprob", None))
-                    for s in segments], getattr(info, "language", "unknown")
+            raw_segments, info = self._model.transcribe(path, word_timestamps=True)
+            segments = [self._segment_dict(s.start, s.end, s.text, getattr(s, "words", None),
+                                           confidence=getattr(s, "avg_logprob", None))
+                        for s in raw_segments]
+            if self._hf_token():  # skip the audio decode when diarization is off
+                segments = self._assign_speakers(segments, self._load_audio(path))
+            return segments, getattr(info, "language", "unknown")
         if variant == "WhisperX":
             # whisperx.load_model() returns a FasterWhisperPipeline whose
             # transcribe() takes neither word_timestamps nor fp16. Word-level
@@ -280,10 +283,12 @@ class TranscriptionProcessor:
             return [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"),
                                        s.get("speaker"))
                     for s in segments], language
-        result = self._model.transcribe(self._load_audio(path), word_timestamps=True, fp16=False)
-        return [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"),
-                                   s.get("speaker"), s.get("avg_logprob"))
-                for s in result.get("segments", [])], result.get("language", "unknown")
+        audio = self._load_audio(path)
+        result = self._model.transcribe(audio, word_timestamps=True, fp16=False)
+        segments = [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"),
+                                       s.get("speaker"), s.get("avg_logprob"))
+                    for s in result.get("segments", [])]
+        return self._assign_speakers(segments, audio), result.get("language", "unknown")
 
     def _whisperx_enrich(self, segments: List[Dict[str, Any]], audio: Any, language: str) -> List[Dict[str, Any]]:
         """Best-effort word alignment + speaker diarization for WhisperX.
@@ -304,8 +309,20 @@ class TranscriptionProcessor:
             segments = whisperx.align(segments, model_a, metadata, audio, device).get("segments", segments)
         except Exception as exc:
             self._emit("⚠️ Word alignment unavailable (%s); exporting utterance-level output only." % exc)
-        if not self._hf_token():
+        return self._assign_speakers(segments, audio)
+
+    def _assign_speakers(self, segments: List[Dict[str, Any]], audio: Any) -> List[Dict[str, Any]]:
+        """Best-effort speaker diarization for any backend's segments.
+
+        Diarization is not a Whisper capability: it runs the separate gated
+        pyannote pipeline (via whisperx.diarize) and tags segments/words by
+        timestamp overlap, so it works the same for every backend. Without a
+        Hugging Face token, or on any failure, the segments come back
+        unchanged and the speaker columns stay empty.
+        """
+        if not self._hf_token() or not segments:
             return segments
+        device = self._device()
         try:
             import inspect
             from whisperx.diarize import DiarizationPipeline, assign_word_speakers
