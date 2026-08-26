@@ -14,6 +14,7 @@ class FakeTranscriptionProcessor(TranscriptionProcessor):
     def _transcribe(self, path, variant, size=None):
         return [{
             "start": 0.0, "end": 1.25, "text": "hello world", "speaker": "SPEAKER_00",
+            "confidence": -0.42,
             "words": [
                 {"word": "hello", "start": 0.0, "end": 0.5, "probability": 0.91, "speaker": "SPEAKER_00"},
                 # No word-level speaker: the export must fall back to the segment's.
@@ -50,6 +51,8 @@ class TranscriptionTests(unittest.TestCase):
             self.assertEqual(rows[0]["label"], "speech")
             self.assertEqual(rows[0]["model"], "Faster Whisper")
             self.assertEqual(rows[0]["speaker"], "SPEAKER_00")
+            # The segment's own confidence value must be preserved, not blanked.
+            self.assertEqual(rows[0]["confidence"], "-0.42")
             self.assertTrue((result_dirs[0] / "detections.csv").exists())
             self.assertTrue((result_dirs[0] / "summary.csv").exists())
             with (result_dirs[0] / "summary.csv").open(newline="", encoding="utf-8") as handle:
@@ -71,9 +74,10 @@ class TranscriptionTests(unittest.TestCase):
                 words = list(csv.DictReader(handle))
         self.assertEqual(
             list(words[0].keys()),
-            ["word", "start", "end", "speaker", "word_score",
+            ["filename", "word", "start", "end", "speaker", "word_score",
              "segment_start", "segment_end", "segment_text"],
         )
+        self.assertEqual(words[0]["filename"], "sample.wav")
         self.assertEqual(words[0]["word"], "hello")
         self.assertEqual(words[0]["speaker"], "SPEAKER_00")
         self.assertEqual(words[0]["word_score"], "0.91")
@@ -102,8 +106,13 @@ def _fake_whisper_module():
 
     class _Model:
         # openai-whisper: transcribe(audio, **decode_options) — permissive kwargs.
+        # Real segments always carry avg_logprob; words carry probability when
+        # word_timestamps=True.
         def transcribe(self, audio, word_timestamps=False, fp16=True, **decode_options):
-            return {"segments": [{"start": 0.0, "end": 1.0, "text": "hi", "words": []}],
+            return {"segments": [{"start": 0.0, "end": 1.0, "text": "hi",
+                                  "avg_logprob": -0.25,
+                                  "words": [{"word": "hi", "start": 0.0, "end": 1.0,
+                                             "probability": 0.88}]}],
                     "language": "en"}
 
     mod.load_model = lambda name: _Model()
@@ -113,8 +122,14 @@ def _fake_whisper_module():
 def _fake_faster_whisper_module():
     mod = types.ModuleType("faster_whisper")
 
+    class _Word:
+        # faster-whisper Word namedtuple fields.
+        word, start, end, probability = "hi", 0.0, 1.0, 0.88
+
     class _Segment:
-        start, end, text, words = 0.0, 1.0, "hi", []
+        start, end, text = 0.0, 1.0, "hi"
+        avg_logprob = -0.31
+        words = [_Word()]
 
     class _Info:
         language = "en"
@@ -272,6 +287,80 @@ class BackendCallSignatureTests(unittest.TestCase):
         self.assertEqual(processor._model_variant, "Whisper (OpenAI)")
         self._run("WhisperX", modules, processor=processor)
         self.assertEqual(processor._model_variant, "WhisperX")
+
+
+class EndToEndCsvExportTests(unittest.TestCase):
+    """Run the real pipeline (process -> _transcribe -> CSV export) against
+    each fake backend and check the researcher-facing CSV contract: each
+    model's own confidence values are preserved, word-level speaker labels
+    survive to the word CSVs, and a merged word-level detections file is
+    written next to detections.csv."""
+
+    def _process(self, variant, modules, env=None):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        source = Path(temp.name) / "clips"
+        source.mkdir()
+        for name in ("a.wav", "b.wav"):
+            (source / name).write_bytes(b"not decoded by fake backend")
+        output = Path(temp.name) / "results"
+        processor = TranscriptionProcessor()
+        with mock.patch.dict(sys.modules, modules), \
+                mock.patch.dict(os.environ, env or {}), \
+                mock.patch.object(TranscriptionProcessor, "_load_audio",
+                                  staticmethod(lambda path: [0.0] * 16000)):
+            processor.process(str(source), variant, str(output))
+        return next(output.glob("transcription_results_*"))
+
+    @staticmethod
+    def _read(path):
+        with path.open(newline="", encoding="utf-8") as handle:
+            return list(csv.DictReader(handle))
+
+    def test_whisper_openai_exports_confidence_and_merged_words(self):
+        result_dir = self._process("Whisper (OpenAI)", {"whisper": _fake_whisper_module()})
+        transcript = self._read(result_dir / "a_transcript.csv")
+        # openai-whisper's segment confidence variable is avg_logprob.
+        self.assertEqual(transcript[0]["confidence"], "-0.25")
+        detections = self._read(result_dir / "detections.csv")
+        self.assertEqual([row["confidence"] for row in detections], ["-0.25", "-0.25"])
+        words = self._read(result_dir / "a_words.csv")
+        self.assertEqual(words[0]["filename"], "a.wav")
+        self.assertEqual(words[0]["word_score"], "0.88")
+        merged = self._read(result_dir / "detections_words.csv")
+        self.assertEqual([row["filename"] for row in merged], ["a.wav", "b.wav"])
+        self.assertEqual(list(merged[0].keys()), list(words[0].keys()))
+
+    def test_faster_whisper_exports_confidence_and_merged_words(self):
+        result_dir = self._process("Faster Whisper",
+                                   {"faster_whisper": _fake_faster_whisper_module()})
+        transcript = self._read(result_dir / "a_transcript.csv")
+        # faster-whisper's segment confidence variable is avg_logprob.
+        self.assertEqual(transcript[0]["confidence"], "-0.31")
+        merged = self._read(result_dir / "detections_words.csv")
+        self.assertEqual([(row["filename"], row["word"], row["word_score"]) for row in merged],
+                         [("a.wav", "hi", "0.88"), ("b.wav", "hi", "0.88")])
+
+    def test_whisperx_exports_word_scores_speakers_and_merged_words(self):
+        mod, diarize_mod = _fake_whisperx_with_diarization()
+        result_dir = self._process(
+            "WhisperX", {"whisperx": mod, "whisperx.diarize": diarize_mod},
+            env={"TINYEXPLORER_HF_TOKEN": "hf_test"})
+        transcript = self._read(result_dir / "a_transcript.csv")
+        # whisperx's batched pipeline has no native segment confidence; the
+        # export falls back to the mean aligned word score.
+        self.assertEqual(transcript[0]["confidence"], "0.9")
+        self.assertEqual(transcript[0]["speaker"], "SPEAKER_00")
+        words = self._read(result_dir / "a_words.csv")
+        self.assertEqual(words[0]["speaker"], "SPEAKER_00")
+        merged = self._read(result_dir / "detections_words.csv")
+        self.assertEqual([row["speaker"] for row in merged], ["SPEAKER_00", "SPEAKER_00"])
+
+    def test_no_merged_words_csv_when_backend_has_no_word_output(self):
+        # Plain whisperx fake: no align model available, so no word output at
+        # all — the merged word file must not appear as an empty husk.
+        result_dir = self._process("WhisperX", {"whisperx": _fake_whisperx_module()})
+        self.assertFalse((result_dir / "detections_words.csv").exists())
 
 
 def _fake_hub_modules():
