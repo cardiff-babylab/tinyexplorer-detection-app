@@ -264,7 +264,9 @@ class TranscriptionProcessor:
         self._emit("🎤 Running speech recognition (may take a while for long recordings)...")
         if variant == "Faster Whisper":
             segments, info = self._model.transcribe(path, word_timestamps=True)
-            return [self._segment_dict(s.start, s.end, s.text, getattr(s, "words", None)) for s in segments], getattr(info, "language", "unknown")
+            return [self._segment_dict(s.start, s.end, s.text, getattr(s, "words", None),
+                                       confidence=getattr(s, "avg_logprob", None))
+                    for s in segments], getattr(info, "language", "unknown")
         if variant == "WhisperX":
             # whisperx.load_model() returns a FasterWhisperPipeline whose
             # transcribe() takes neither word_timestamps nor fp16. Word-level
@@ -280,7 +282,7 @@ class TranscriptionProcessor:
                     for s in segments], language
         result = self._model.transcribe(self._load_audio(path), word_timestamps=True, fp16=False)
         return [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"),
-                                   s.get("speaker"))
+                                   s.get("speaker"), s.get("avg_logprob"))
                 for s in result.get("segments", [])], result.get("language", "unknown")
 
     def _whisperx_enrich(self, segments: List[Dict[str, Any]], audio: Any, language: str) -> List[Dict[str, Any]]:
@@ -345,7 +347,8 @@ class TranscriptionProcessor:
         return segments
 
     @staticmethod
-    def _segment_dict(start: Any, end: Any, text: Any, words: Any, speaker: Any = None) -> Dict[str, Any]:
+    def _segment_dict(start: Any, end: Any, text: Any, words: Any, speaker: Any = None,
+                      confidence: Any = None) -> Dict[str, Any]:
         out_words = []
         for word in words or []:
             if isinstance(word, dict):
@@ -357,8 +360,14 @@ class TranscriptionProcessor:
                 out_words.append({"word": getattr(word, "word", ""), "start": getattr(word, "start", None),
                                   "end": getattr(word, "end", None), "probability": getattr(word, "probability", None),
                                   "speaker": getattr(word, "speaker", None)})
+        if confidence is None:
+            # Backends without a native segment confidence (whisperx's batched
+            # pipeline): fall back to the mean word probability/score.
+            scores = [w["probability"] for w in out_words if w.get("probability") is not None]
+            confidence = sum(scores) / len(scores) if scores else None
         return {"start": float(start or 0), "end": float(end or 0), "text": str(text or "").strip(),
-                "words": out_words, "speaker": str(speaker) if speaker else ""}
+                "words": out_words, "speaker": str(speaker) if speaker else "",
+                "confidence": None if confidence is None else float(confidence)}
 
     def process(self, source: str, variant: str, results_folder: str,
                 size: Optional[str] = None) -> None:
@@ -374,10 +383,11 @@ class TranscriptionProcessor:
             "label", "confidence", "model", "text", "language", "speaker",
         ]
         word_headers = [
-            "word", "start", "end", "speaker", "word_score",
+            "filename", "word", "start", "end", "speaker", "word_score",
             "segment_start", "segment_end", "segment_text",
         ]
         shared_rows: List[List[Any]] = []
+        shared_word_rows: List[List[Any]] = []
         summary_rows: List[List[Any]] = []
         try:
             if not files:
@@ -395,16 +405,21 @@ class TranscriptionProcessor:
                     writer = csv.writer(handle)
                     # Keep the first columns compatible with the detection
                     # exporters (id/frame_idx/filename), then add the
-                    # speech-specific time and text fields.  Empty values are
-                    # intentional for frame_idx/confidence: speech is
-                    # timestamped rather than frame- or box-based.
+                    # speech-specific time and text fields.  frame_idx stays
+                    # empty: speech is timestamped rather than frame-based.
+                    # confidence is each model's own measure — avg_logprob for
+                    # the Whisper backends, mean aligned word score for
+                    # WhisperX — so values are not comparable across models.
                     writer.writerow(shared_headers)
                     file_rows = []
                     for segment_id, segment in enumerate(segments, start=1):
                         if segment["text"]:
+                            confidence = segment.get("confidence")
                             row = [
                                 segment_id, "", os.path.basename(path), "speech",
-                                segment["start"], segment["end"], "speech", "", variant,
+                                segment["start"], segment["end"], "speech",
+                                "" if confidence is None else round(float(confidence), 3),
+                                variant,
                                 segment["text"], language, segment.get("speaker", ""),
                             ]
                             writer.writerow(row)
@@ -412,7 +427,7 @@ class TranscriptionProcessor:
                             shared_rows.append(row)
                             self.results.append(dict(segment, audio_path=path, language=language, model=variant))
                 word_rows = [
-                    [word.get("word"), word.get("start"), word.get("end"),
+                    [os.path.basename(path), word.get("word"), word.get("start"), word.get("end"),
                      word.get("speaker") or segment.get("speaker", ""),
                      round(float(word["probability"]), 3) if word.get("probability") is not None else "",
                      segment["start"], segment["end"], segment["text"]]
@@ -424,6 +439,7 @@ class TranscriptionProcessor:
                         writer = csv.writer(handle)
                         writer.writerow(word_headers)
                         writer.writerows(word_rows)
+                    shared_word_rows.extend(word_rows)
                 with open(txt_path, "w", encoding="utf-8") as handle:
                     for segment in segments:
                         if segment["text"]:
@@ -444,6 +460,15 @@ class TranscriptionProcessor:
                 writer = csv.writer(handle)
                 writer.writerow(shared_headers)
                 writer.writerows(shared_rows)
+            # Word-level counterpart of detections.csv: all files' word rows in
+            # one CSV, so researchers don't have to merge the per-file word
+            # CSVs themselves. Skipped entirely when no backend produced word
+            # timings, matching the per-file behaviour.
+            if shared_word_rows:
+                with open(os.path.join(output, "detections_words.csv"), "w", newline="", encoding="utf-8") as handle:
+                    writer = csv.writer(handle)
+                    writer.writerow(word_headers)
+                    writer.writerows(shared_word_rows)
             with open(os.path.join(output, "summary.csv"), "w", newline="", encoding="utf-8") as handle:
                 writer = csv.writer(handle)
                 writer.writerow(["path", "type", "segments", "duration", "language", "model"])
