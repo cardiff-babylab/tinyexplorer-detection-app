@@ -703,9 +703,10 @@ const App = () => {
             return;
         }
 
-        // WhisperX can label speakers, but only with a (gated-model) Hugging
-        // Face token. If none is configured anywhere, ask once before running.
-        if (selectedMode === "speech" && selectedModel === "WhisperX" &&
+        // Every speech backend can label speakers via the separate pyannote
+        // diarization pipeline, but only with a (gated-model) Hugging Face
+        // token. If none is configured anywhere, ask once before running.
+        if (selectedMode === "speech" &&
                 ipcRenderer && typeof ipcRenderer.invoke === "function") {
             try {
                 const status = await ipcRenderer.invoke("get-hf-token-status");
@@ -830,10 +831,11 @@ const App = () => {
                             <span role="img" aria-label="key">🔑</span> Hugging Face token for speaker labels
                         </h3>
                         <p>
-                            WhisperX can tag each utterance and word with a speaker
-                            (SPEAKER_00, SPEAKER_01, …), but the diarization model is
-                            gated: it needs your personal Hugging Face token, and your
-                            account must have accepted the pyannote model terms.
+                            Each speech model can tag utterances and words with a
+                            speaker (SPEAKER_00, SPEAKER_01, …), but the diarization
+                            model is gated: it needs your personal Hugging Face token,
+                            and your account must have accepted the pyannote model
+                            terms.
                         </p>
                         <p>
                             The token is stored encrypted with your macOS Keychain and
@@ -1004,7 +1006,7 @@ const App = () => {
                                 ));
                             })()}
                         </select>
-                        {selectedMode === "speech" && selectedModel === "WhisperX" && (
+                        {selectedMode === "speech" && (
                             <button
                                 type="button"
                                 className="hf-token-link"

@@ -305,8 +305,12 @@ class EndToEndCsvExportTests(unittest.TestCase):
             (source / name).write_bytes(b"not decoded by fake backend")
         output = Path(temp.name) / "results"
         processor = TranscriptionProcessor()
+        # Default to NO token so the no-diarization tests stay deterministic
+        # even on machines with a global HF_TOKEN; tests opt in via env.
+        env_vars = {"TINYEXPLORER_HF_TOKEN": "", "HF_TOKEN": ""}
+        env_vars.update(env or {})
         with mock.patch.dict(sys.modules, modules), \
-                mock.patch.dict(os.environ, env or {}), \
+                mock.patch.dict(os.environ, env_vars), \
                 mock.patch.object(TranscriptionProcessor, "_load_audio",
                                   staticmethod(lambda path: [0.0] * 16000)):
             processor.process(str(source), variant, str(output))
@@ -361,6 +365,61 @@ class EndToEndCsvExportTests(unittest.TestCase):
         # all — the merged word file must not appear as an empty husk.
         result_dir = self._process("WhisperX", {"whisperx": _fake_whisperx_module()})
         self.assertFalse((result_dir / "detections_words.csv").exists())
+
+    # --- Diarization is offered for every backend, with and without token ---
+
+    def _diarization_modules(self, backend_name, backend_module):
+        whisperx_mod, diarize_mod = _fake_whisperx_with_diarization()
+        return {backend_name: backend_module, "whisperx": whisperx_mod,
+                "whisperx.diarize": diarize_mod}
+
+    def test_whisper_openai_diarizes_when_token_present(self):
+        result_dir = self._process(
+            "Whisper (OpenAI)",
+            self._diarization_modules("whisper", _fake_whisper_module()),
+            env={"TINYEXPLORER_HF_TOKEN": "hf_test"})
+        transcript = self._read(result_dir / "a_transcript.csv")
+        self.assertEqual(transcript[0]["speaker"], "SPEAKER_00")
+        words = self._read(result_dir / "a_words.csv")
+        self.assertEqual(words[0]["speaker"], "SPEAKER_00")
+
+    def test_faster_whisper_diarizes_when_token_present(self):
+        result_dir = self._process(
+            "Faster Whisper",
+            self._diarization_modules("faster_whisper", _fake_faster_whisper_module()),
+            env={"TINYEXPLORER_HF_TOKEN": "hf_test"})
+        transcript = self._read(result_dir / "a_transcript.csv")
+        self.assertEqual(transcript[0]["speaker"], "SPEAKER_00")
+        merged = self._read(result_dir / "detections_words.csv")
+        self.assertEqual([row["speaker"] for row in merged], ["SPEAKER_00", "SPEAKER_00"])
+
+    def test_faster_whisper_without_token_completes_with_empty_speakers(self):
+        # The user declined / never configured a token: the run must complete
+        # normally, just without speaker labels.
+        result_dir = self._process("Faster Whisper",
+                                   {"faster_whisper": _fake_faster_whisper_module()})
+        transcript = self._read(result_dir / "a_transcript.csv")
+        self.assertEqual(transcript[0]["text"], "hi")
+        self.assertEqual(transcript[0]["speaker"], "")
+        words = self._read(result_dir / "a_words.csv")
+        self.assertEqual(words[0]["speaker"], "")
+
+    def test_diarization_failure_degrades_to_empty_speakers(self):
+        # Token present but the gated pipeline is unusable (no access,
+        # offline...): the transcription itself must still be exported.
+        modules = self._diarization_modules("faster_whisper", _fake_faster_whisper_module())
+
+        class _BrokenPipeline:
+            def __init__(self, *args, **kwargs):
+                raise RuntimeError("403 Client Error: gated repo")
+
+        modules["whisperx.diarize"].DiarizationPipeline = _BrokenPipeline
+        result_dir = self._process("Faster Whisper", modules,
+                                   env={"TINYEXPLORER_HF_TOKEN": "hf_test"})
+        transcript = self._read(result_dir / "a_transcript.csv")
+        self.assertEqual(transcript[0]["text"], "hi")
+        self.assertEqual(transcript[0]["speaker"], "")
+        self.assertTrue((result_dir / "detections_words.csv").exists())
 
 
 def _fake_hub_modules():
