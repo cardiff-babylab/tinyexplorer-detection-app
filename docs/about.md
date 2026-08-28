@@ -12,7 +12,7 @@ The TinyExplorer Detection App is a user-friendly graphical interface designed w
 
 - **Concept and Project Management:** Teodor Nikolov & Hana D'Souza
 - **Lead Development and Implementation:** Tamas Foldes
-- **Code Contributions:** Ziye Zhang & Teodor Nikolov
+- **Code Contributions:** Craig Thompson, Cátia M. Oliveira, Ziye Zhang & Teodor Nikolov
 
 ## Privacy & Data Security
 
