@@ -39,9 +39,12 @@ The application combines modern web technologies with machine learning framework
 - **Frontend:** React with TypeScript
 - **Desktop Framework:** Electron
 - **Backend:** Python with Flask
-- **Machine Learning:** YOLO (PyTorch) and RetinaFace (TensorFlow)
+- **Machine Learning:**
+  - **Face Detection:** YOLO (PyTorch) and RetinaFace (TensorFlow)
+  - **Hand Detection:** 100 Days Of Hands Dataset (100DOH)
+  - **Speech Recognition:** OpenAI Whisper, Faster-Whisper, and WhisperX
 - **Cross-platform:** Windows, macOS, and Linux support
-
+  
 ## License
 
 This project is released under the MIT License. See the [LICENSE](https://github.com/cardiff-babylab/tinyexplorer-detection-app/blob/master/LICENSE.txt) file for details.
