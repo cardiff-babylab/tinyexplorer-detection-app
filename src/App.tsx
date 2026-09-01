@@ -40,13 +40,15 @@ const App = () => {
     const [selectedMode, setSelectedMode] = useState<string>("face");
     // Whisper checkpoint size for Speech mode, mirroring the sizes the
     // requester's reference script exposes. large-v2 matches the quality of
-    // the reference outputs; smaller sizes trade accuracy for speed.
+    // the reference outputs, but on a CPU-only laptop it needs ~10 GB RAM
+    // and runs at 10-15x audio duration (2026-09-01 Windows testing), so
+    // "small" is the default and large stays an explicit opt-in.
     const WHISPER_SIZES: ReadonlyArray<string> = [
         "tiny", "tiny.en", "base", "base.en", "small", "small.en",
         "medium", "medium.en", "large-v1", "large-v2", "large-v3",
         "turbo", "large-v3-turbo",
     ];
-    const [whisperSize, setWhisperSize] = useState<string>("large-v2");
+    const [whisperSize, setWhisperSize] = useState<string>("small");
     const [results, setResults] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
     const [resultsFolder, setResultsFolder] = useState("");
     const [completedResultsFolder, setCompletedResultsFolder] = useState("");
