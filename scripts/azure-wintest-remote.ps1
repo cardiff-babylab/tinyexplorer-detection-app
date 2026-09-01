@@ -16,9 +16,15 @@ $Py = "$InstallDir\resources\pythondist\yolo-env\python.exe"
 
 Write-Output "=== 1/5 Download installer ==="
 if (-not (Test-Path $Py)) {
-    $sw = [Diagnostics.Stopwatch]::StartNew()
-    Invoke-WebRequest -Uri $Url -OutFile $Setup -UseBasicParsing
-    Write-Output ("downloaded {0:N0} MB in {1:N0}s" -f ((Get-Item $Setup).Length / 1MB), $sw.Elapsed.TotalSeconds)
+    if ($env:SETUP_EXE -and (Test-Path $env:SETUP_EXE)) {
+        # CI artifact build (public releases predate the speech feature).
+        $Setup = $env:SETUP_EXE
+        Write-Output "using provided installer: $Setup"
+    } else {
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        Invoke-WebRequest -Uri $Url -OutFile $Setup -UseBasicParsing
+        Write-Output ("downloaded {0:N0} MB in {1:N0}s" -f ((Get-Item $Setup).Length / 1MB), $sw.Elapsed.TotalSeconds)
+    }
 
     Write-Output "=== 2/5 Silent install ==="
     # NSIS: /S silent, /D=<dir> must be the last argument.

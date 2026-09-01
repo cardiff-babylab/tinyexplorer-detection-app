@@ -6,6 +6,11 @@ name: Windows speech probe
 
 on:
   workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Build Windows run id whose windows-setup artifact to test (public releases predate the speech feature)"
+        required: false
+        default: "33490363522"
 
 jobs:
   probe:
@@ -14,6 +19,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install released app and run speech probes
+      - name: Download windows-setup artifact from build run
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-setup
+          path: setup-dl
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install app and run speech probes
         shell: pwsh
-        run: ./scripts/azure-wintest-remote.ps1
+        run: |
+          $env:SETUP_EXE = (Get-ChildItem setup-dl -Filter *.exe | Select-Object -First 1).FullName
+          ./scripts/azure-wintest-remote.ps1
