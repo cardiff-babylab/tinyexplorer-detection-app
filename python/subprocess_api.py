@@ -178,6 +178,18 @@ class SubprocessAPI:
                     
             elif cmd_type == 'start_processing':
                 try:
+                    # One job at a time: a second start used to spawn a second
+                    # thread sharing the same processor/model state while the
+                    # first kept running (stop only takes effect between
+                    # files), leaving both jobs crawling and the old model
+                    # pinned in RAM.
+                    if (self.face_processor.is_processing
+                            or (self.transcription_processor
+                                and self.transcription_processor.is_processing)):
+                        return {'status': 'error',
+                                'message': 'A processing job is already running. '
+                                           'Stop it and wait for it to finish first.'}
+
                     # Personal Hugging Face token for gated diarization models.
                     # Env-only handoff: popped before any further use of the
                     # payload so it cannot reach logs or result files.
@@ -206,9 +218,13 @@ class SubprocessAPI:
                         whisper_size = data.get('whisper_size')
                         thread = threading.Thread(target=self.transcription_processor.process,
                                                   args=(folder_path, model, results_folder, whisper_size))
+                        # Claim the slot before the thread is scheduled, so a
+                        # rapid double-start can't slip past the guard above.
+                        self.transcription_processor.is_processing = True
                     else:
                         thread = threading.Thread(target=self.face_processor.process_folder,
                                                   args=(folder_path, confidence, model, save_results, results_folder))
+                        self.face_processor.is_processing = True
                     thread.start()
 
                     return {'status': 'success', 'message': 'Processing started'}

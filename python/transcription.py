@@ -18,6 +18,12 @@ AUDIO_EXTENSIONS = (".wav", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".mp4", ".m
 TRANSCRIPTION_VARIANTS = ["Whisper (OpenAI)", "Faster Whisper", "WhisperX"]
 
 
+class ProcessingStopped(Exception):
+    """Raised from inside a backend's progress hook when the user hits stop,
+    so a stop can interrupt a file mid-transcription instead of only taking
+    effect between files."""
+
+
 class TranscriptionProcessor:
     def __init__(self, progress_callback: Optional[Callable[[str], None]] = None,
                  completion_callback: Optional[Callable[[Dict[str, Any]], None]] = None):
@@ -33,10 +39,34 @@ class TranscriptionProcessor:
         # the pyannote diarization pipeline.
         self._align_cache: Optional[Tuple[str, Any, Any]] = None
         self._diarizer: Any = None
+        # Position within the current batch, for intra-file progress events.
+        self._file_index = 0
+        self._file_total = 1
+        self._last_percent = -1.0
 
     def _emit(self, message: str) -> None:
         if self.progress_callback:
             self.progress_callback(message)
+
+    def _check_stop(self) -> None:
+        if self._stop.is_set():
+            raise ProcessingStopped()
+
+    def _emit_file_progress(self, fraction: float) -> None:
+        """Move the UI progress bar while a single file transcribes.
+
+        The renderer already maps 'audio_completed' progress_percent onto the
+        bar, so intra-file updates reuse that event with a fractional
+        position. Throttled to whole-percent steps to keep stdout light."""
+        if not self.completion_callback or not self._file_total:
+            return
+        fraction = min(max(fraction, 0.0), 1.0)
+        percent = (self._file_index + fraction) / self._file_total * 100
+        if percent - self._last_percent >= 1.0:
+            self._last_percent = percent
+            self.completion_callback({"status": "audio_completed", "progress_percent": percent,
+                                      "audio_index": self._file_index + 1,
+                                      "total_audio": self._file_total})
 
     def stop_processing(self) -> None:
         self._stop.set()
@@ -195,6 +225,54 @@ class TranscriptionProcessor:
 
         return _cm()
 
+    def _whisper_progress(self):
+        """Context manager: routes openai-whisper's internal tqdm bar (one
+        update per 30 s window) into _emit_file_progress, and turns a pending
+        stop into ProcessingStopped mid-file. whisper/transcribe.py resolves
+        the bar as the module-global `tqdm.tqdm`, so swapping that module
+        attribute is contained to whisper. No-op if the internals change."""
+        import types as _types
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _cm():
+            try:
+                import whisper.transcribe as wt
+                original = wt.tqdm
+            except Exception:
+                yield
+                return
+            processor = self
+
+            class _EmitBar:
+                def __init__(self, total: Any = None, **kwargs: Any):
+                    self.total = int(total or 0)
+                    self.n = 0
+
+                def __enter__(self) -> "_EmitBar":
+                    return self
+
+                def __exit__(self, *args: Any) -> bool:
+                    return False
+
+                def update(self, n: int = 1) -> None:
+                    processor._check_stop()
+                    self.n += int(n or 0)
+                    if self.total:
+                        processor._emit_file_progress(self.n / self.total)
+
+                def close(self) -> None: pass
+                def refresh(self) -> None: pass
+                def set_description(self, *args: Any, **kwargs: Any) -> None: pass
+
+            wt.tqdm = _types.SimpleNamespace(tqdm=_EmitBar)
+            try:
+                yield
+            finally:
+                wt.tqdm = original
+
+        return _cm()
+
     @staticmethod
     def _device() -> str:
         return "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES", "") not in ("", "-1") else "cpu"
@@ -263,28 +341,44 @@ class TranscriptionProcessor:
             self._load_model(variant, size)
         self._emit("🎤 Running speech recognition (may take a while for long recordings)...")
         if variant == "Faster Whisper":
+            # transcribe() returns a lazy generator: consuming it segment by
+            # segment lets the UI bar track s.end/duration and lets a stop
+            # interrupt mid-file instead of after the whole recording.
             raw_segments, info = self._model.transcribe(path, word_timestamps=True)
-            segments = [self._segment_dict(s.start, s.end, s.text, getattr(s, "words", None),
-                                           confidence=getattr(s, "avg_logprob", None))
-                        for s in raw_segments]
+            duration = float(getattr(info, "duration", 0) or 0)
+            segments = []
+            for s in raw_segments:
+                self._check_stop()
+                segments.append(self._segment_dict(s.start, s.end, s.text, getattr(s, "words", None),
+                                                   confidence=getattr(s, "avg_logprob", None)))
+                if duration:
+                    self._emit_file_progress(float(s.end or 0) / duration)
             if self._hf_token():  # skip the audio decode when diarization is off
                 segments = self._assign_speakers(segments, self._load_audio(path))
             return segments, getattr(info, "language", "unknown")
         if variant == "WhisperX":
             # whisperx.load_model() returns a FasterWhisperPipeline whose
-            # transcribe() takes neither word_timestamps nor fp16. Word-level
-            # times come from the separate align() stage, speaker labels from
-            # the diarization stage — both are best-effort extras.
+            # transcribe() takes neither word_timestamps nor fp16 but does
+            # accept a percent progress_callback (3.8+). Word-level times come
+            # from the separate align() stage, speaker labels from the
+            # diarization stage — both are best-effort extras.
             audio = self._load_audio(path)
+
+            def _wx_progress(percent: Any) -> None:
+                self._check_stop()
+                self._emit_file_progress(float(percent or 0) / 100.0)
+
             result = self._model.transcribe(
-                audio, batch_size=int(os.environ.get("TINYEXPLORER_WHISPERX_BATCH", "8")))
+                audio, batch_size=int(os.environ.get("TINYEXPLORER_WHISPERX_BATCH", "8")),
+                progress_callback=_wx_progress)
             language = result.get("language", "unknown")
             segments = self._whisperx_enrich(result.get("segments", []), audio, language)
             return [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"),
                                        s.get("speaker"))
                     for s in segments], language
         audio = self._load_audio(path)
-        result = self._model.transcribe(audio, word_timestamps=True, fp16=False)
+        with self._whisper_progress():
+            result = self._model.transcribe(audio, word_timestamps=True, fp16=False)
         segments = [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"),
                                        s.get("speaker"), s.get("avg_logprob"))
                     for s in result.get("segments", [])]
@@ -320,7 +414,7 @@ class TranscriptionProcessor:
         Hugging Face token, or on any failure, the segments come back
         unchanged and the speaker columns stay empty.
         """
-        if not self._hf_token() or not segments:
+        if not self._hf_token() or not segments or self._stop.is_set():
             return segments
         device = self._device()
         try:
@@ -413,8 +507,13 @@ class TranscriptionProcessor:
             for index, path in enumerate(files):
                 if self._stop.is_set():
                     break
+                self._file_index, self._file_total, self._last_percent = index, len(files), -1.0
                 self._emit("🎤 Transcribing %d/%d: %s" % (index + 1, len(files), os.path.basename(path)))
-                segments, language = self._transcribe(path, variant, size)
+                try:
+                    segments, language = self._transcribe(path, variant, size)
+                except ProcessingStopped:
+                    self._emit("⏹️ Processing stopped by user")
+                    break
                 stem = os.path.splitext(os.path.basename(path))[0]
                 csv_path = os.path.join(output, stem + "_transcript.csv")
                 txt_path = os.path.join(output, stem + "_transcript.txt")

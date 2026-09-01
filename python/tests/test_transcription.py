@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from transcription import TRANSCRIPTION_VARIANTS, TranscriptionProcessor
+from transcription import TRANSCRIPTION_VARIANTS, ProcessingStopped, TranscriptionProcessor
 
 
 class FakeTranscriptionProcessor(TranscriptionProcessor):
@@ -134,6 +134,7 @@ def _fake_faster_whisper_module():
 
     class _Info:
         language = "en"
+        duration = 1.0
 
     class WhisperModel:
         def __init__(self, name, device="cpu", compute_type="int8"):
@@ -181,12 +182,15 @@ def _fake_whisperx_module():
     mod = types.ModuleType("whisperx")
 
     class _Pipeline:
-        # Mirrors whisperx.asr.FasterWhisperPipeline.transcribe: it takes NO
-        # word_timestamps/fp16 kwargs, so passing them raises TypeError just
-        # like the real library.
+        # Mirrors whisperx.asr.FasterWhisperPipeline.transcribe (3.8.6): it
+        # takes NO word_timestamps/fp16 kwargs, so passing them raises
+        # TypeError just like the real library. progress_callback is the real
+        # 3.8+ per-segment percent hook the app relies on.
         def transcribe(self, audio, batch_size=None, num_workers=0, language=None,
                        task=None, chunk_size=30, print_progress=False,
-                       combined_progress=False):
+                       combined_progress=False, verbose=False, progress_callback=None):
+            if progress_callback is not None:
+                progress_callback(100.0)
             return {"segments": [{"start": 0.0, "end": 1.0, "text": "hi"}],
                     "language": "en"}
 
@@ -577,6 +581,63 @@ class LoadAudioTests(unittest.TestCase):
         # Resampled 8 kHz -> 16 kHz, so roughly twice the samples of one second.
         self.assertGreater(len(audio), rate * 1.5)
         self.assertLessEqual(float(np.abs(audio).max()), 1.0)
+
+
+class ProgressAndStopTests(unittest.TestCase):
+    """Intra-file progress events and mid-file stop (2026-09-01 Windows
+    feedback: the bar sat at 0% for the whole file and stop only applied
+    between files)."""
+
+    def _events_for(self, variant, modules):
+        events = []
+        processor = TranscriptionProcessor(completion_callback=events.append)
+        with mock.patch.dict(sys.modules, modules), \
+                mock.patch.object(TranscriptionProcessor, "_load_audio",
+                                  staticmethod(lambda path: [0.0] * 16000)):
+            processor._transcribe("sample.wav", variant)
+        return [e for e in events if e.get("status") == "audio_completed"]
+
+    def test_faster_whisper_emits_intra_file_progress(self):
+        events = self._events_for("Faster Whisper",
+                                  {"faster_whisper": _fake_faster_whisper_module()})
+        # Fake: one segment ending at 1.0 of a 1.0 s file -> 100%.
+        self.assertTrue(events)
+        self.assertEqual(events[-1]["progress_percent"], 100.0)
+
+    def test_whisperx_emits_intra_file_progress(self):
+        events = self._events_for("WhisperX", {"whisperx": _fake_whisperx_module()})
+        self.assertTrue(events)
+        self.assertEqual(events[-1]["progress_percent"], 100.0)
+
+    def test_pending_stop_interrupts_mid_file(self):
+        processor = TranscriptionProcessor()
+        processor.stop_processing()
+        with mock.patch.dict(sys.modules, {"faster_whisper": _fake_faster_whisper_module()}):
+            with self.assertRaises(ProcessingStopped):
+                processor._transcribe("sample.wav", "Faster Whisper")
+
+    def test_stopped_run_still_writes_merged_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "in"
+            source.mkdir()
+            (source / "a.wav").write_bytes(b"")
+            (source / "b.wav").write_bytes(b"")
+            processor = FakeTranscriptionProcessor()
+            original = FakeTranscriptionProcessor._transcribe
+
+            def stop_after_first(self_, path, variant, size=None):
+                # First file transcribes normally, then the user hits stop:
+                # the second file must raise instead of transcribing.
+                if self_._file_index == 0:
+                    return original(self_, path, variant, size)
+                raise ProcessingStopped()
+
+            with mock.patch.object(FakeTranscriptionProcessor, "_transcribe", stop_after_first):
+                processor.process(str(source), "Faster Whisper", tmp)
+            result_dir = next(Path(tmp).glob("transcription_results_*"))
+            merged = (result_dir / "detections.csv").read_text()
+            self.assertIn("a.wav", merged)
+            self.assertNotIn("b.wav", merged)
 
 
 if __name__ == "__main__":
