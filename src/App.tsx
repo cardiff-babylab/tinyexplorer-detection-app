@@ -458,7 +458,7 @@ const App = () => {
 
         // Hand detection models
         if (modelName === "HandObject-Tuned") {
-            return "HandObject (TinyExplorer-tuned)";
+            return "HandObject (100DOH-TinyExplorer-Tuned)";
         } else if (modelName === "HandObject-Baseline") {
             return "HandObject (100DOH baseline)";
         }

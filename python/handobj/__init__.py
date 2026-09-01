@@ -1,4 +1,4 @@
-"""Vendored HandObject hand detector (100DOH / TinyExplorer-tuned Faster R-CNN).
+"""Vendored HandObject hand detector (100DOH-TinyExplorer-Tuned Faster R-CNN).
 
 The heavy PyTorch model lives under ``handobj.inference``; import it lazily so
 that merely importing this package (or the ``hand_handobj`` detector) does not

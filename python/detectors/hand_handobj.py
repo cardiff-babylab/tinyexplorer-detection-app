@@ -1,8 +1,8 @@
-"""HandObject hand detector (100DOH / TinyExplorer-tuned Faster R-CNN res101).
+"""HandObject hand detector (100DOH-TinyExplorer-Tuned Faster R-CNN res101).
 
 Registers two selectable checkpoints:
 
-* ``HandObject-Tuned``   – TinyExplorer-tuned, includes own/other ownership head.
+* ``HandObject-Tuned``   – 100DOH-TinyExplorer-Tuned, includes own/other ownership head.
 * ``HandObject-Baseline``– original 100DOH baseline (no ownership).
 
 The ~361 MB checkpoints are **not** bundled; they are downloaded on first use to

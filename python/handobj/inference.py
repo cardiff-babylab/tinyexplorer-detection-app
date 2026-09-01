@@ -2,7 +2,7 @@
 
 Encapsulates model construction and single-image hand detection, adapted from
 the prototype ``RunHandDetection.py`` (100DOH hand-object detector, res101,
-TinyExplorer-tuned). Object detection and hand-object pairing are intentionally
+100DOH-TinyExplorer-Tuned). Object detection and hand-object pairing are intentionally
 omitted — this build reports hands with per-hand contact state, left/right side
 and (for the Tuned checkpoint) own/other ownership.
 
