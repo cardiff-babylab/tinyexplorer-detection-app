@@ -59,7 +59,7 @@ See also: [Supported File Formats](main-features.md#supported-file-formats).
 
 - **Concept and Project Management:** Teodor Nikolov & Hana D'Souza
 - **Lead Development and Implementation:** Tamas Foldes
-- **Code Contributions:** Ziye Zhang & Teodor Nikolov
+- **Code Contributions:** Craig Thompson, Cátia M. Oliveira, Ziye Zhang & Teodor Nikolov
 
 ## Funding
 
