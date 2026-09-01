@@ -1,0 +1,46 @@
+name: Update Citation
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  update-citation:
+    # Weights/asset releases are published as prereleases and must not bump the citation
+    if: ${{ !github.event.release.prerelease && !github.event.release.draft }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout main
+      uses: actions/checkout@v4
+      with:
+        ref: main
+
+    - name: Update version and release date in CITATION.cff
+      env:
+        TAG: ${{ github.event.release.tag_name }}
+        PUBLISHED_AT: ${{ github.event.release.published_at }}
+      run: |
+        VERSION="${TAG#v}"
+        DATE="${PUBLISHED_AT%%T*}"
+        sed -i "s/^version: .*/version: \"${VERSION}\"/" CITATION.cff
+        sed -i "s/^date-released: .*/date-released: \"${DATE}\"/" CITATION.cff
+        git diff CITATION.cff
+
+    - name: Validate CITATION.cff
+      run: pipx run cffconvert --validate
+
+    - name: Commit and push
+      env:
+        TAG: ${{ github.event.release.tag_name }}
+      run: |
+        if git diff --quiet CITATION.cff; then
+          echo "CITATION.cff already up to date"
+          exit 0
+        fi
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git commit -m "chore: update CITATION.cff to ${TAG}" CITATION.cff
+        git push origin main
