@@ -19,7 +19,6 @@ import atexit
 _STARTUP_T0 = time.time()
 _TIMING_ENABLED = bool(os.environ.get("STARTUP_TIMING"))
 
-from calc import calc as real_calc
 # NOTE: importing face_detection pulls in the detector registry. Thanks to the
 # detectors' lazy imports, this no longer drags in torch/TensorFlow, so it stays
 # cheap and does not block the "ready" signal below.
@@ -146,10 +145,6 @@ class SubprocessAPI:
             
             if cmd_type == 'ping':
                 return {'status': 'success', 'message': 'pong'}
-                
-            elif cmd_type == 'calc':
-                result = real_calc(data.get('math', ''))
-                return {'status': 'success', 'result': result}
                 
             elif cmd_type == 'echo':
                 return {'status': 'success', 'message': data.get('text', '')}
