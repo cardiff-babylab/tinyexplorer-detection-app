@@ -286,6 +286,31 @@ class TranscriptionProcessor:
         # keeps old callers working.
         model_name = size or os.environ.get("TINYEXPLORER_WHISPER_MODEL", "base")
         self._emit("🎤 Loading transcription model '%s' (first use may download model weights)..." % model_name)
+        # Importing the speech libraries alone takes ~45 s even on a fast
+        # machine (torch + pyannote + lightning for WhisperX), and antivirus
+        # cold-scans can stretch that to minutes of silence that users read
+        # as a hang. Heartbeat until the load returns.
+        heartbeat_stop = threading.Event()
+
+        def _heartbeat() -> None:
+            waited = 0
+            while not heartbeat_stop.wait(20):
+                waited += 20
+                self._emit("⏳ Still loading %s (%d s) — first load is slow while the speech "
+                           "libraries are read and scanned; the app is not stuck..." % (variant, waited))
+
+        threading.Thread(target=_heartbeat, daemon=True).start()
+        try:
+            self._load_model_impl(variant, model_name)
+        finally:
+            heartbeat_stop.set()
+        if not self._hf_token():
+            self._emit("ℹ️ Set a Hugging Face token (🔑 in the app, or TINYEXPLORER_HF_TOKEN) to "
+                       "enable speaker diarization; exporting without speaker labels.")
+        self._model_variant = variant
+        self._model_size = size
+
+    def _load_model_impl(self, variant: str, model_name: str) -> None:
         if variant == "Whisper (OpenAI)":
             import whisper
             self._ensure_openai_whisper_weights(model_name)
@@ -304,11 +329,6 @@ class TranscriptionProcessor:
                                                   compute_type="float16" if device == "cuda" else "int8")
         else:
             raise ValueError("Unknown transcription model: %s" % variant)
-        if not self._hf_token():
-            self._emit("ℹ️ Set a Hugging Face token (🔑 in the app, or TINYEXPLORER_HF_TOKEN) to "
-                       "enable speaker diarization; exporting without speaker labels.")
-        self._model_variant = variant
-        self._model_size = size
 
     @staticmethod
     def _load_audio(path: str) -> Any:
