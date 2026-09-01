@@ -73,4 +73,24 @@ print('openai-whisper tiny: %.1fs' % (time.time() - t0))
 $out = & $Py -c $bench 2>&1
 Write-Output "exit=$LASTEXITCODE"
 Write-Output ($out | Out-String)
+
+Write-Output "=== 6/6 WhisperX end-to-end (app code path: load_model + transcribe, no KMP var) ==="
+Remove-Item Env:KMP_DUPLICATE_LIB_OK -ErrorAction SilentlyContinue
+$wx = @"
+import time, numpy as np
+t0 = time.time()
+import whisperx
+m = whisperx.load_model('tiny', device='cpu', compute_type='int8')
+print('load_model: %.1fs' % (time.time() - t0))
+sr = 16000
+t = np.linspace(0, 20, 20 * sr, dtype=np.float32)
+audio = (0.05 * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
+t0 = time.time()
+result = m.transcribe(audio, batch_size=8)
+print('transcribe: %.1fs, %d segments, lang=%s'
+      % (time.time() - t0, len(result.get('segments', [])), result.get('language')))
+"@
+$out = & $Py -c $wx 2>&1
+Write-Output "exit=$LASTEXITCODE"
+Write-Output ($out | Out-String)
 Write-Output "=== done ==="
