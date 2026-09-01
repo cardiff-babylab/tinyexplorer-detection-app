@@ -13,6 +13,8 @@ import * as path from "path";
 import * as fs from "fs";
 import * as https from "https";
 
+import { buildBrowseFileFilters } from "./browseFileFilters";
+
 // Wall-clock at main-process entry, used for lightweight startup phase timing.
 // Verbose [timing] lines are gated behind the STARTUP_TIMING env var; the phase
 // marks below let us measure process-start -> window-shown -> python-ready.
@@ -489,22 +491,7 @@ function createWindow() {
 
     // Handle file browsing
     ipcMain.on("browse-file", async (event: any, options: any = {}) => {
-        const speechFilters = options.mode === "speech";
-        const audioVideoFilter = {
-            name: 'Audio and Video',
-            extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg', 'mp4', 'mov', 'mkv'],
-        };
-        const filters = speechFilters
-            ? [
-                audioVideoFilter,
-                { name: 'All Files', extensions: ['*'] },
-            ]
-            : [
-                { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'] },
-                { name: 'Videos', extensions: ['mp4', 'avi', 'mov'] },
-                audioVideoFilter,
-                { name: 'All Files', extensions: ['*'] },
-            ];
+        const filters = buildBrowseFileFilters(options.mode);
         const result = await dialog.showOpenDialog(mainWindow!, {
             properties: ["openFile"],
             filters,
