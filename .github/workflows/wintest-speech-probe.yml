@@ -1,0 +1,19 @@
+# Manually dispatched probe for the Windows-only speech backend failures
+# diagnosed on 2026-09-01: installs the released app on a windows runner and
+# runs scripts/azure-wintest-remote.ps1 (OMP duplicate-runtime clash, the
+# KMP_DUPLICATE_LIB_OK workaround, and CPU-speed calibration).
+name: Windows speech probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install released app and run speech probes
+        shell: pwsh
+        run: ./scripts/azure-wintest-remote.ps1
