@@ -1,9 +1,12 @@
-"""HandObject hand detector (100DOH-TinyExplorer-Tuned Faster R-CNN res101).
+"""HandObject hand detector (100DOH Faster R-CNN res101 baseline).
 
-Registers two selectable checkpoints:
+Registers a single selectable checkpoint:
 
-* ``HandObject-Tuned``   – 100DOH-TinyExplorer-Tuned, includes own/other ownership head.
-* ``HandObject-Baseline``– original 100DOH baseline (no ownership).
+* ``HandObject-Baseline`` – original 100DOH baseline (no ownership).
+
+The 100DOH-TinyExplorer-Tuned checkpoint (own/other ownership head) is
+deliberately not registered for now: access to models trained on infant data
+is restricted while a responsible-access policy is agreed.
 
 The ~361 MB checkpoints are **not** bundled; they are downloaded on first use to
 the app's model-cache directory (mirroring how the YOLO/RetinaFace weights are
@@ -61,11 +64,6 @@ class _VariantSpec:
 # variant name -> checkpoint spec. sha256 values are of the assets hosted on the
 # handobj-weights-v1 GitHub Release; downloads are verified against them.
 _VARIANTS: Dict[str, _VariantSpec] = {
-    "HandObject-Tuned": _VariantSpec(
-        filename="faster_rcnn_1_15_2739.pth",
-        has_ownership=True,
-        sha256="56c4aa5dc973eb28b9d07266fcb0aaff8f96f9e9ca9afe7c3b85034513093d13",
-    ),
     "HandObject-Baseline": _VariantSpec(
         filename="faster_rcnn_1_8_132028.pth",
         has_ownership=False,
@@ -76,11 +74,11 @@ _VARIANTS: Dict[str, _VariantSpec] = {
 
 @register_detector("hand_handobj")
 class HandObjectDetector(VisionDetector):
-    """Hand detector reporting bbox, contact state, side and (Tuned) ownership."""
+    """Hand detector reporting bbox, contact state and side."""
 
     name = "hand"
     mode = "hand"
-    variants = ["HandObject-Tuned", "HandObject-Baseline"]
+    variants = ["HandObject-Baseline"]
 
     def __init__(self, progress_callback=None) -> None:
         super().__init__(progress_callback)
