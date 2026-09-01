@@ -75,10 +75,11 @@ class TranscriptionTests(unittest.TestCase):
         self.assertEqual(
             list(words[0].keys()),
             ["filename", "word", "start", "end", "speaker", "word_score",
-             "segment_start", "segment_end", "segment_text"],
+             "model", "segment_start", "segment_end", "segment_text"],
         )
         self.assertEqual(words[0]["filename"], "sample.wav")
         self.assertEqual(words[0]["word"], "hello")
+        self.assertEqual(words[0]["model"], "WhisperX")
         self.assertEqual(words[0]["speaker"], "SPEAKER_00")
         self.assertEqual(words[0]["word_score"], "0.91")
         # Word without its own speaker inherits the segment speaker.
@@ -333,6 +334,8 @@ class EndToEndCsvExportTests(unittest.TestCase):
         self.assertEqual(words[0]["word_score"], "0.88")
         merged = self._read(result_dir / "detections_words.csv")
         self.assertEqual([row["filename"] for row in merged], ["a.wav", "b.wav"])
+        self.assertEqual([row["model"] for row in merged],
+                         ["Whisper (OpenAI)", "Whisper (OpenAI)"])
         self.assertEqual(list(merged[0].keys()), list(words[0].keys()))
 
     def test_faster_whisper_exports_confidence_and_merged_words(self):

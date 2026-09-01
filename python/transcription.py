@@ -401,7 +401,7 @@ class TranscriptionProcessor:
         ]
         word_headers = [
             "filename", "word", "start", "end", "speaker", "word_score",
-            "segment_start", "segment_end", "segment_text",
+            "model", "segment_start", "segment_end", "segment_text",
         ]
         shared_rows: List[List[Any]] = []
         shared_word_rows: List[List[Any]] = []
@@ -447,7 +447,7 @@ class TranscriptionProcessor:
                     [os.path.basename(path), word.get("word"), word.get("start"), word.get("end"),
                      word.get("speaker") or segment.get("speaker", ""),
                      round(float(word["probability"]), 3) if word.get("probability") is not None else "",
-                     segment["start"], segment["end"], segment["text"]]
+                     variant, segment["start"], segment["end"], segment["text"]]
                     for segment in segments if segment["text"]
                     for word in segment.get("words") or []
                 ]
