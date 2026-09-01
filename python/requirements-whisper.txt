@@ -1,5 +1,8 @@
 # Audio transcription packages installed into the shared CPU/PyTorch runtime.
-openai-whisper
-faster-whisper
-soundfile
-whisperx
+# Pinned to the exact stack verified working on Windows + macOS on 2026-09-01
+# (wintest-speech-probe CI). NOTE: whisperx pins torch~=2.8.0, so this install
+# intentionally downgrades the yolo-env torch that requirements.txt resolved.
+openai-whisper==20250625
+faster-whisper==1.2.1
+soundfile==0.14.0
+whisperx==3.8.6
