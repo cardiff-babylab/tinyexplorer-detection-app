@@ -1009,9 +1009,9 @@ const App = () => {
                                 type="button"
                                 className="hf-token-link"
                                 onClick={() => setHfTokenModalOpen(true)}
-                                title="Configure the Hugging Face token used for speaker diarization"
+                                title="Optional: configure the Hugging Face token used for speaker diarization. Without one, transcription still runs but the speaker column stays empty."
                             >
-                                <span role="img" aria-label="key">🔑</span> Speaker diarization token…
+                                <span role="img" aria-label="key">🔑</span> Speaker diarization token (optional)…
                             </button>
                         )}
                     </div>
