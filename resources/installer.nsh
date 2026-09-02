@@ -33,7 +33,27 @@
 
 !macro customInstall
   ${ConsoleLog} "Installing application files..."
-  
+
+  ; A clean Windows has no VC++ 2015-2022 runtime, without which torch and
+  ; ctranslate2 in the bundled Python environments cannot load their DLLs.
+  ; CI drops vc_redist.x64.exe into resources/ before electron-builder runs;
+  ; local builds without the file simply skip the bundling.
+  !if /FileExists "${PROJECT_DIR}\resources\vc_redist.x64.exe"
+    SetRegView 64
+    ReadRegDWORD $R3 HKLM "SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" "Installed"
+    SetRegView lastused
+    ${If} $R3 = 1
+      ${ConsoleLog} "VC++ runtime already present"
+    ${Else}
+      ${ConsoleLog} "Installing Microsoft Visual C++ 2015-2022 Redistributable (x64)..."
+      File "/oname=$PLUGINSDIR\vc_redist.x64.exe" "${PROJECT_DIR}\resources\vc_redist.x64.exe"
+      ExecWait '"$PLUGINSDIR\vc_redist.x64.exe" /install /quiet /norestart' $R4
+      ${ConsoleLog} "VC++ redistributable exit code: $R4 (0=ok, 1638=newer present, 3010=reboot pending)"
+    ${EndIf}
+  !else
+    !warning "resources/vc_redist.x64.exe not found - installer will not bundle the VC++ runtime"
+  !endif
+
   ; Log Python environment setup
   ${ConsoleLog} "Setting up Python environments..."
   ${ConsoleLog} "  - YOLO environment"
