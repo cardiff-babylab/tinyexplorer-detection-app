@@ -27,6 +27,10 @@ class ProcessingStopped(Exception):
 
 
 class TranscriptionProcessor:
+    # Interval between "still working" status lines while a file is being
+    # transcribed. Class-level so tests can shrink it.
+    WORK_HEARTBEAT_SECONDS = 30.0
+
     def __init__(self, progress_callback: Optional[Callable[[str], None]] = None,
                  completion_callback: Optional[Callable[[Dict[str, Any]], None]] = None):
         self.progress_callback = progress_callback
@@ -47,6 +51,12 @@ class TranscriptionProcessor:
         self._last_percent = -1.0
         self._loading_phase = "starting speech runtime"
         self._loading_started = 0.0
+        # Per-file work phase for the heartbeat: recognition loops report a
+        # fraction (and get stall detection); decode/alignment/diarization
+        # phases have no fraction and get plain elapsed-time lines.
+        self._work_phase = "running speech recognition"
+        self._work_tracks_fraction = True
+        self._current_fraction = 0.0
 
     def _emit(self, message: str) -> None:
         if self.progress_callback:
@@ -68,9 +78,10 @@ class TranscriptionProcessor:
         The renderer already maps 'audio_completed' progress_percent onto the
         bar, so intra-file updates reuse that event with a fractional
         position. Throttled to whole-percent steps to keep stdout light."""
+        fraction = min(max(fraction, 0.0), 1.0)
+        self._current_fraction = fraction  # read by the work heartbeat
         if not self.completion_callback or not self._file_total:
             return
-        fraction = min(max(fraction, 0.0), 1.0)
         percent = (self._file_index + fraction) / self._file_total * 100
         if percent - self._last_percent >= 1.0:
             self._last_percent = percent
@@ -286,6 +297,77 @@ class TranscriptionProcessor:
 
         return _cm()
 
+    def _set_work_phase(self, phase: str, tracks_fraction: bool) -> None:
+        """Label the current per-file stage for the work heartbeat."""
+        self._work_phase = phase
+        self._work_tracks_fraction = tracks_fraction
+
+    def _work_heartbeat(self):
+        """Context manager: emit a status line every WORK_HEARTBEAT_SECONDS
+        while a file is worked on, covering the phases that otherwise print
+        nothing between 'Running speech recognition...' and the results
+        (recognition compute, audio decode, alignment, diarization — the
+        2026-09-02 'tiny model stalled' report). Recognition phases report
+        percent done; four consecutive beats without movement add an explicit
+        may-be-stuck warning so a real hang is distinguishable from slow
+        progress. The renderer coalesces consecutive '⏳ Still' lines into a
+        single live-updating row."""
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _cm():
+            stop = threading.Event()
+            started = time.monotonic()
+            processor = self
+
+            def _beat() -> None:
+                last_fraction = processor._current_fraction
+                stalled_beats = 0
+                while not stop.wait(processor.WORK_HEARTBEAT_SECONDS):
+                    elapsed_min = (time.monotonic() - started) / 60.0
+                    phase = processor._work_phase
+                    if not processor._work_tracks_fraction:
+                        stalled_beats = 0
+                        last_fraction = processor._current_fraction
+                        processor._emit("⏳ Still %s (%.1f min elapsed)..." % (phase, elapsed_min))
+                        continue
+                    fraction = processor._current_fraction
+                    if fraction > last_fraction:
+                        last_fraction = fraction
+                        stalled_beats = 0
+                        processor._emit("⏳ Still %s — %d%% of this file done (%.1f min elapsed)..."
+                                        % (phase, int(fraction * 100), elapsed_min))
+                    else:
+                        stalled_beats += 1
+                        warning = ("" if stalled_beats < 4 else
+                                   " If this keeps repeating, the job may be stuck — "
+                                   "press Stop and use 'Copy log for bug report'.")
+                        processor._emit("⏳ Still %s — %d%% of this file done, no change for "
+                                        "%.0f s (%.1f min elapsed)...%s"
+                                        % (phase, int(fraction * 100),
+                                           stalled_beats * processor.WORK_HEARTBEAT_SECONDS,
+                                           elapsed_min, warning))
+
+            threading.Thread(target=_beat, daemon=True).start()
+            try:
+                yield
+            finally:
+                stop.set()
+
+        return _cm()
+
+    def _decode_audio(self, path: str) -> Any:
+        """_load_audio plus heartbeat phase bookkeeping: PyAV-decoding a long
+        recording in one go is otherwise a silent stretch users read as a
+        hang."""
+        previous = (self._work_phase, self._work_tracks_fraction)
+        self._set_work_phase("decoding the audio track", False)
+        self._emit("🔉 Decoding audio track...")
+        try:
+            return self._load_audio(path)
+        finally:
+            self._set_work_phase(*previous)
+
     @staticmethod
     def _device() -> str:
         return "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES", "") not in ("", "-1") else "cpu"
@@ -386,6 +468,12 @@ class TranscriptionProcessor:
             self._load_model(variant, size)
         self._check_stop()
         self._emit("🎤 Running speech recognition (may take a while for long recordings)...")
+        self._current_fraction = 0.0
+        self._set_work_phase("running speech recognition", True)
+        with self._work_heartbeat():
+            return self._transcribe_impl(path, variant)
+
+    def _transcribe_impl(self, path: str, variant: str) -> Tuple[List[Dict[str, Any]], str]:
         if variant == "Faster Whisper":
             # transcribe() returns a lazy generator: consuming it segment by
             # segment lets the UI bar track s.end/duration and lets a stop
@@ -400,7 +488,7 @@ class TranscriptionProcessor:
                 if duration:
                     self._emit_file_progress(float(s.end or 0) / duration)
             if self._hf_token():  # skip the audio decode when diarization is off
-                segments = self._assign_speakers(segments, self._load_audio(path))
+                segments = self._assign_speakers(segments, self._decode_audio(path))
             return segments, getattr(info, "language", "unknown")
         if variant == "WhisperX":
             # whisperx.load_model() returns a FasterWhisperPipeline whose
@@ -408,7 +496,7 @@ class TranscriptionProcessor:
             # accept a percent progress_callback (3.8+). Word-level times come
             # from the separate align() stage, speaker labels from the
             # diarization stage — both are best-effort extras.
-            audio = self._load_audio(path)
+            audio = self._decode_audio(path)
 
             def _wx_progress(percent: Any) -> None:
                 self._check_stop()
@@ -422,7 +510,7 @@ class TranscriptionProcessor:
             return [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"),
                                        s.get("speaker"))
                     for s in segments], language
-        audio = self._load_audio(path)
+        audio = self._decode_audio(path)
         with self._whisper_progress():
             result = self._model.transcribe(audio, word_timestamps=True, fp16=False)
         segments = [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"),
@@ -445,6 +533,7 @@ class TranscriptionProcessor:
                     model_a, metadata = whisperx.load_align_model(language_code=language, device=device)
                 self._align_cache = (language, model_a, metadata)
             _, model_a, metadata = self._align_cache
+            self._set_work_phase("aligning word-level timestamps", False)
             self._emit("📐 Aligning word-level timestamps...")
             segments = whisperx.align(segments, model_a, metadata, audio, device).get("segments", segments)
         except Exception as exc:
@@ -463,6 +552,9 @@ class TranscriptionProcessor:
         if not self._hf_token() or not segments or self._stop.is_set():
             return segments
         device = self._device()
+        # pyannote exposes no progress hook, so minutes of silence are normal
+        # here: name the phase so the heartbeat never calls it stuck.
+        self._set_work_phase("preparing speaker diarization", False)
         try:
             import inspect
             from whisperx.diarize import DiarizationPipeline, assign_word_speakers
@@ -494,6 +586,7 @@ class TranscriptionProcessor:
                                    % (model_name or "(whisperx default)"))
                 if self._diarizer is None and last_error is not None:
                     raise last_error
+            self._set_work_phase("identifying speakers", False)
             self._emit("🗣️ Identifying speakers (can take several minutes on CPU)...")
             diarization = self._diarizer(audio)
             segments = assign_word_speakers(diarization, {"segments": segments}).get("segments", segments)

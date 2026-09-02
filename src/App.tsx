@@ -309,8 +309,15 @@ const App = () => {
                         
                         // Check if this is a download progress update (contains "Downloading" and percentage)
                         const isDownloadProgress = message.includes('⏳ Downloading') && message.includes('%');
-                        
+                        // Heartbeat lines ("⏳ Still …") repeat every ~20-30 s through
+                        // model loading and recognition; coalesce consecutive ones into
+                        // a single live-updating row like download progress.
+                        const isHeartbeat = message.startsWith('⏳ Still ');
+
                         setProgressMessages(prev => {
+                            if (isHeartbeat && prev.length > 0 && prev[prev.length - 1].startsWith('⏳ Still ')) {
+                                return [...prev.slice(0, -1), message];
+                            }
                             if (isDownloadProgress && prev.length > 0) {
                                 // Check if the last message was also a download progress for the same model
                                 const lastMessage = prev[prev.length - 1];

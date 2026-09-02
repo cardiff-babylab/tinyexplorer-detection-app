@@ -2,6 +2,7 @@ import csv
 import os
 import sys
 import tempfile
+import time
 import types
 import unittest
 from pathlib import Path
@@ -626,7 +627,11 @@ class ProgressAndStopTests(unittest.TestCase):
                 "whisper.transcribe": transcribe_module,
         }):
             with processor._whisper_progress():
-                bar = transcribe_module.tqdm.tqdm(total=100)
+                # Mirror openai-whisper's real call: tqdm.tqdm(total=...,
+                # unit="frames", disable=verbose is not False). The stand-in
+                # bar must tolerate those kwargs and report updates even
+                # though the real bar would be disabled.
+                bar = transcribe_module.tqdm.tqdm(total=100, unit="frames", disable=True)
                 bar.update(50)
             self.assertIs(transcribe_module.tqdm, original_tqdm)
 
@@ -673,6 +678,102 @@ class ProgressAndStopTests(unittest.TestCase):
             merged = (result_dir / "detections.csv").read_text()
             self.assertIn("a.wav", merged)
             self.assertNotIn("b.wav", merged)
+
+
+class WorkHeartbeatTests(unittest.TestCase):
+    """2026-09-02 field report: with 'Whisper (OpenAI)' + tiny, the progress
+    panel went silent after 'Running speech recognition...' and the job never
+    visibly completed. Recognition, audio decode and diarization emit no text
+    between start and finish, so a slow run and a wedged run look identical.
+    These tests pin the work heartbeat that closes that gap: alive-and-moving
+    runs keep reporting percent, silent phases are named, and a genuinely
+    stuck recognition loop escalates to an explicit may-be-stuck warning."""
+
+    def _run_with_slow_backend(self, work, interval=0.02):
+        """Run the OpenAI path with model.transcribe replaced by
+        `work(processor)`; return the emitted progress messages."""
+        mod = types.ModuleType("whisper")
+        holder = {}
+
+        class _Model:
+            def transcribe(self, audio, word_timestamps=False, fp16=True, **decode_options):
+                work(holder["processor"])
+                return {"segments": [{"start": 0.0, "end": 1.0, "text": "hi", "words": []}],
+                        "language": "en"}
+
+        mod.load_model = lambda name: _Model()
+        messages = []
+        processor = TranscriptionProcessor(progress_callback=messages.append)
+        holder["processor"] = processor
+        with mock.patch.dict(sys.modules, {"whisper": mod}), \
+                mock.patch.object(TranscriptionProcessor, "WORK_HEARTBEAT_SECONDS", interval), \
+                mock.patch.object(TranscriptionProcessor, "_load_audio",
+                                  staticmethod(lambda path: [0.0] * 16000)):
+            processor._transcribe("sample.wav", "Whisper (OpenAI)")
+        return messages
+
+    def test_recognition_emits_heartbeat_while_backend_is_silent(self):
+        messages = self._run_with_slow_backend(lambda p: time.sleep(0.15))
+        beats = [m for m in messages if m.startswith("⏳ Still running speech recognition")]
+        self.assertTrue(beats)
+
+    def test_heartbeat_reports_percent_when_progress_moves(self):
+        def work(processor):
+            time.sleep(0.06)
+            processor._emit_file_progress(0.5)
+            time.sleep(0.06)
+
+        messages = self._run_with_slow_backend(work)
+        self.assertTrue(any("50% of this file" in m for m in messages))
+
+    def test_heartbeat_escalates_to_stuck_warning_without_progress(self):
+        # No fraction movement for many beats -> the heartbeat must say so
+        # explicitly, making a real hang distinguishable from slow progress.
+        messages = self._run_with_slow_backend(lambda p: time.sleep(0.3))
+        self.assertTrue(any("may be stuck" in m for m in messages))
+
+    def test_moving_recognition_never_reports_stuck(self):
+        def work(processor):
+            for step in range(1, 7):
+                time.sleep(0.03)
+                processor._emit_file_progress(step / 7)
+
+        messages = self._run_with_slow_backend(work)
+        self.assertFalse(any("may be stuck" in m for m in messages))
+
+    def test_openai_path_announces_audio_decode(self):
+        # PyAV-decoding a long recording is the first silent stretch after
+        # 'Running speech recognition...'; it must be announced.
+        messages = self._run_with_slow_backend(lambda p: None)
+        decode = [i for i, m in enumerate(messages) if m.startswith("🔉 Decoding audio track")]
+        recognition = [i for i, m in enumerate(messages)
+                       if m.startswith("🎤 Running speech recognition")]
+        self.assertTrue(decode)
+        self.assertTrue(recognition)
+        self.assertLess(recognition[0], decode[0])
+
+    def test_diarization_heartbeat_names_phase_without_stall_warning(self):
+        # pyannote gives no progress hook, so minutes of silence are normal
+        # here: the heartbeat must name the phase but never cry stuck.
+        mod, diarize_mod = _fake_whisperx_with_diarization()
+        original_call = diarize_mod.DiarizationPipeline.__call__
+
+        def slow_call(self_, audio, **kwargs):
+            time.sleep(0.15)
+            return original_call(self_, audio, **kwargs)
+
+        diarize_mod.DiarizationPipeline.__call__ = slow_call
+        messages = []
+        processor = TranscriptionProcessor(progress_callback=messages.append)
+        with mock.patch.dict(sys.modules, {"faster_whisper": _fake_faster_whisper_module(),
+                                           "whisperx": mod, "whisperx.diarize": diarize_mod}), \
+                mock.patch.dict(os.environ, {"TINYEXPLORER_HF_TOKEN": "hf_test"}), \
+                mock.patch.object(TranscriptionProcessor, "WORK_HEARTBEAT_SECONDS", 0.02), \
+                mock.patch.object(TranscriptionProcessor, "_load_audio",
+                                  staticmethod(lambda path: [0.0] * 16000)):
+            processor._transcribe("sample.wav", "Faster Whisper")
+        self.assertTrue(any(m.startswith("⏳ Still identifying speakers") for m in messages))
+        self.assertFalse(any("may be stuck" in m for m in messages))
 
 
 if __name__ == "__main__":

@@ -24,6 +24,9 @@ let pyProc: childProcess.ChildProcess | null = null;
 let pythonReady = false;
 let commandQueue: Array<{command: any, callback: Function}> = [];
 let isShuttingDown = false;
+// Auto-restart budget for unexpected backend deaths (crash-loop guard).
+let crashRestartCount = 0;
+const MAX_CRASH_RESTARTS = 3;
 let currentModelType = 'yolo'; // Track current environment (default to YOLO for widest CPU compatibility)
 
 const detectModelType = (command: any): string => {
@@ -61,6 +64,11 @@ const restartPythonIfNeeded = async (requiredModelType: string): Promise<boolean
 
 const initializePython = async () => {
     try { console.log("Starting Python subprocess..."); } catch (e) {}
+    // A fresh subprocess is by definition not shutting down. Without this
+    // reset, the exitPyProc() inside an environment switch left the flag set
+    // forever, so later crashes were treated as an intentional shutdown and
+    // reported to no one.
+    isShuttingDown = false;
     
     const srcPath = path.join(__dirname, "..", PY_FOLDER, PY_MODULE + ".py");
     const launcherPath = path.join(__dirname, "..", PY_FOLDER, PY_LAUNCHER + ".py");
@@ -345,6 +353,11 @@ const initializePython = async () => {
     }
     
     try { console.log("Python subprocess started, PID:", pyProc.pid); } catch (e) {}
+
+    // Captured per instance: a late 'close' from a process we killed on
+    // purpose (environment switch) must not be treated as a crash of the
+    // replacement process that may already be running.
+    const spawnedProc: childProcess.ChildProcess = pyProc;
     
     // Handle subprocess output
     if (pyProc.stdout) {
@@ -403,9 +416,37 @@ const initializePython = async () => {
     
     pyProc.on('close', (code: number | null) => {
         try { console.log(`Python subprocess exited with code ${code}`); } catch (e) {}
+        const intentionalExit = isShuttingDown || Boolean((spawnedProc as any).__intentionalExit);
+        // Unstick the renderer on any unexpected death (native crash, OOM
+        // kill, ...): Python-level errors are reported by the backend itself,
+        // but a process-level death emits nothing, leaving the progress panel
+        // frozen forever (the 2026-09-02 "tiny model never completed" report).
+        if (!intentionalExit) {
+            const codeLabel = code === null ? "killed by signal" : `code ${code}`;
+            Electron.BrowserWindow.getAllWindows().forEach(window => {
+                window.webContents.send('python-event', {
+                    type: 'completion',
+                    data: {
+                        status: 'error',
+                        error: `The detection engine exited unexpectedly (${codeLabel}), so processing did not finish. ` +
+                               "Restarting the engine — use 'Copy log for bug report' to report this.",
+                    },
+                    timestamp: Date.now(),
+                });
+            });
+            // Bring the backend back so the app stays usable, with a cap to
+            // avoid a crash loop on machines where it can never start.
+            if (crashRestartCount < MAX_CRASH_RESTARTS) {
+                crashRestartCount++;
+                try { console.warn(`Restarting Python subprocess after unexpected exit (attempt ${crashRestartCount}/${MAX_CRASH_RESTARTS})`); } catch (e) {}
+                setTimeout(() => {
+                    initializePython().catch((e) => { try { console.error("Python restart failed:", e); } catch (e2) {} });
+                }, 1000);
+            }
+        }
         // Only show error dialog if it's an unexpected exit (not during app shutdown)
         // and the exit code indicates an actual error
-        if (code !== 0 && code !== null && !isShuttingDown) {
+        if (code !== 0 && code !== null && !intentionalExit) {
             // Don't show dialog for signal-based terminations (negative codes on Unix)
             if (code > 0) {
                 try { console.error(`Python process exited unexpectedly with code ${code}`); } catch (e) {}
@@ -435,8 +476,10 @@ const initializePython = async () => {
                 }
             }
         }
-        pythonReady = false;
-        pyProc = null;
+        if (pyProc === spawnedProc) {
+            pythonReady = false;
+            pyProc = null;
+        }
     });
     
     // Wait for Python to be ready with a soft timeout (warn once, keep waiting)
@@ -686,6 +729,7 @@ const exitPyProc = () => {
     if (pyProc) {
         try { console.log("Terminating Python subprocess..."); } catch (e) {}
         isShuttingDown = true;
+        (pyProc as any).__intentionalExit = true;
         
         // Send exit command first for graceful shutdown
         sendCommandToPython({ type: 'exit' });
