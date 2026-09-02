@@ -339,6 +339,17 @@
   transition: width 0.3s ease;
 }
 
+.progress-fill.progress-indeterminate {
+  width: 35% !important;
+  animation: speech-progress-indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes speech-progress-indeterminate {
+  0% { transform: translateX(-110%); }
+  50% { transform: translateX(95%); }
+  100% { transform: translateX(285%); }
+}
+
 .progress-text {
   text-align: center;
   font-size: 14px;

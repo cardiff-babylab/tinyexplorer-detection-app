@@ -609,6 +609,41 @@ class ProgressAndStopTests(unittest.TestCase):
         self.assertTrue(events)
         self.assertEqual(events[-1]["progress_percent"], 100.0)
 
+    def test_openai_progress_hook_patches_transcribe_module(self):
+        whisper_pkg = types.ModuleType("whisper")
+        whisper_pkg.__path__ = []
+        # The package deliberately exports a function with the same name as
+        # the submodule, matching openai-whisper's public API.
+        whisper_pkg.transcribe = lambda *args, **kwargs: None
+        transcribe_module = types.ModuleType("whisper.transcribe")
+        original_tqdm = object()
+        transcribe_module.tqdm = original_tqdm
+        events = []
+        processor = TranscriptionProcessor(completion_callback=events.append)
+
+        with mock.patch.dict(sys.modules, {
+                "whisper": whisper_pkg,
+                "whisper.transcribe": transcribe_module,
+        }):
+            with processor._whisper_progress():
+                bar = transcribe_module.tqdm.tqdm(total=100)
+                bar.update(50)
+            self.assertIs(transcribe_module.tqdm, original_tqdm)
+
+        progress = [e for e in events if e.get("status") == "audio_completed"]
+        self.assertEqual(progress[-1]["progress_percent"], 50.0)
+
+    def test_speech_process_announces_processing_started(self):
+        events = []
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "sample.wav"
+            source.write_bytes(b"fake")
+            processor = FakeTranscriptionProcessor(completion_callback=events.append)
+            processor.process(str(source), "Faster Whisper", tmp)
+
+        started = [e for e in events if e.get("status") == "processing_started"]
+        self.assertEqual(started, [{"status": "processing_started", "total_audio": 1}])
+
     def test_pending_stop_interrupts_mid_file(self):
         processor = TranscriptionProcessor()
         processor.stop_processing()

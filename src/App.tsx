@@ -1122,11 +1122,17 @@ const App = () => {
                         <div className="progress-section">
                             <div className="progress-bar">
                                 <div 
-                                    className="progress-fill" 
+                                    className={`progress-fill ${
+                                        selectedMode === "speech" && progress === 0 ? "progress-indeterminate" : ""
+                                    }`}
                                     style={{ width: `${Math.min(progress, 100)}%` }}
                                 />
                             </div>
-                            <div className="progress-text">{progress.toFixed(1)}%</div>
+                            <div className="progress-text">
+                                {selectedMode === "speech" && progress === 0
+                                    ? "Preparing speech model and audio…"
+                                    : `${progress.toFixed(1)}%`}
+                            </div>
                         </div>
                     )}
 

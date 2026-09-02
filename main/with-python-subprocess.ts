@@ -316,6 +316,21 @@ const initializePython = async () => {
         MODEL_TYPE: currentModelType, // Pass current model type to Python
     } as NodeJS.ProcessEnv;
 
+    if (process.platform === "win32") {
+        // Keep large model and library caches on the local disk. Managed lab
+        // machines often redirect USERPROFILE/AppData/Roaming to a network
+        // share, which can turn Whisper imports and checkpoint loads into
+        // multi-minute stalls.
+        const speechCache = process.env.LOCALAPPDATA
+            ? path.join(process.env.LOCALAPPDATA, "TinyExplorer Detection App", "SpeechCache")
+            : path.join(app.getPath("userData"), "SpeechCache");
+        fs.mkdirSync(speechCache, { recursive: true });
+        spawnEnv.TINYEXPLORER_WHISPER_CACHE =
+            process.env.TINYEXPLORER_WHISPER_CACHE || path.join(speechCache, "whisper");
+        spawnEnv.HF_HOME = process.env.HF_HOME || path.join(speechCache, "huggingface");
+        spawnEnv.MPLCONFIGDIR = process.env.MPLCONFIGDIR || path.join(speechCache, "matplotlib");
+    }
+
     pyProc = crossSpawn(pythonPath, [scriptPath], {
         stdio: ['pipe', 'pipe', 'pipe'],
         cwd: path.dirname(scriptPath), // Set working directory to script location

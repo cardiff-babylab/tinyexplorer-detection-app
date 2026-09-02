@@ -8,8 +8,10 @@ not installed.
 from __future__ import annotations
 
 import csv
+import importlib
 import os
 import threading
+import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -43,10 +45,18 @@ class TranscriptionProcessor:
         self._file_index = 0
         self._file_total = 1
         self._last_percent = -1.0
+        self._loading_phase = "starting speech runtime"
+        self._loading_started = 0.0
 
     def _emit(self, message: str) -> None:
         if self.progress_callback:
             self.progress_callback(message)
+
+    def _set_loading_phase(self, phase: str) -> None:
+        """Record and display the precise model-loading stage."""
+        self._loading_phase = phase
+        elapsed = time.monotonic() - self._loading_started if self._loading_started else 0.0
+        self._emit("⏳ %s (%.1f s elapsed)..." % (phase, elapsed))
 
     def _check_stop(self) -> None:
         if self._stop.is_set():
@@ -237,7 +247,10 @@ class TranscriptionProcessor:
         @contextmanager
         def _cm():
             try:
-                import whisper.transcribe as wt
+                # ``whisper.__init__`` exports a function named ``transcribe``.
+                # A dotted import can therefore bind that function instead of
+                # the module whose global tqdm object we need to replace.
+                wt = importlib.import_module("whisper.transcribe")
                 original = wt.tqdm
             except Exception:
                 yield
@@ -286,6 +299,8 @@ class TranscriptionProcessor:
         # keeps old callers working.
         model_name = size or os.environ.get("TINYEXPLORER_WHISPER_MODEL", "base")
         self._emit("🎤 Loading transcription model '%s' (first use may download model weights)..." % model_name)
+        self._loading_started = time.monotonic()
+        self._loading_phase = "starting speech runtime"
         # Importing the speech libraries alone takes ~45 s even on a fast
         # machine (torch + pyannote + lightning for WhisperX), and antivirus
         # cold-scans can stretch that to minutes of silence that users read
@@ -296,14 +311,17 @@ class TranscriptionProcessor:
             waited = 0
             while not heartbeat_stop.wait(20):
                 waited += 20
-                self._emit("⏳ Still loading %s (%d s) — first load is slow while the speech "
-                           "libraries are read and scanned; the app is not stuck..." % (variant, waited))
+                self._emit("⏳ Still loading %s (%d s; %s) — first load is slow while the speech "
+                           "libraries are read and scanned; the app is not stuck..."
+                           % (variant, waited, self._loading_phase))
 
         threading.Thread(target=_heartbeat, daemon=True).start()
         try:
             self._load_model_impl(variant, model_name)
         finally:
             heartbeat_stop.set()
+        elapsed = time.monotonic() - self._loading_started
+        self._emit("✅ %s model ready (%.1f s)." % (variant, elapsed))
         if not self._hf_token():
             self._emit("ℹ️ Set a Hugging Face token (🔑 in the app, or TINYEXPLORER_HF_TOKEN) to "
                        "enable speaker diarization; exporting without speaker labels.")
@@ -312,18 +330,25 @@ class TranscriptionProcessor:
 
     def _load_model_impl(self, variant: str, model_name: str) -> None:
         if variant == "Whisper (OpenAI)":
+            self._set_loading_phase("Importing OpenAI Whisper")
             import whisper
+            self._set_loading_phase("Checking OpenAI Whisper model weights")
             self._ensure_openai_whisper_weights(model_name)
+            self._set_loading_phase("Loading OpenAI Whisper checkpoint into memory")
             self._model = whisper.load_model(model_name)
         elif variant == "Faster Whisper":
+            self._set_loading_phase("Importing Faster Whisper")
             from faster_whisper import WhisperModel
             device = self._device()
             compute = "float16" if device == "cuda" else "int8"
+            self._set_loading_phase("Loading Faster Whisper model")
             with self._hf_download_progress("Faster Whisper %s" % model_name):
                 self._model = WhisperModel(model_name, device=device, compute_type=compute)
         elif variant == "WhisperX":
+            self._set_loading_phase("Importing WhisperX and speech libraries")
             import whisperx
             device = self._device()
+            self._set_loading_phase("Loading WhisperX model and voice-activity pipeline")
             with self._hf_download_progress("WhisperX %s" % model_name):
                 self._model = whisperx.load_model(model_name, device=device,
                                                   compute_type="float16" if device == "cuda" else "int8")
@@ -359,6 +384,7 @@ class TranscriptionProcessor:
     def _transcribe(self, path: str, variant: str, size: Optional[str] = None) -> Tuple[List[Dict[str, Any]], str]:
         if self._model_variant != variant or self._model_size != size or self._model is None:
             self._load_model(variant, size)
+        self._check_stop()
         self._emit("🎤 Running speech recognition (may take a while for long recordings)...")
         if variant == "Faster Whisper":
             # transcribe() returns a lazy generator: consuming it segment by
@@ -523,6 +549,8 @@ class TranscriptionProcessor:
         try:
             if not files:
                 raise ValueError("No supported audio or video files found")
+            if self.completion_callback:
+                self.completion_callback({"status": "processing_started", "total_audio": len(files)})
             self._emit("🎤 Found %d audio/video file(s)" % len(files))
             for index, path in enumerate(files):
                 if self._stop.is_set():

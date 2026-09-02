@@ -83,6 +83,19 @@ const isDev = (process.env.NODE_ENV === "development");
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null;
 let splash: BrowserWindow | null = null;
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!hasSingleInstanceLock) {
+    app.quit();
+} else {
+    app.on("second-instance", () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+}
 
 // --- Notify-only update check ------------------------------------------------
 // Surface an info banner in the renderer when a newer *app* release exists on
@@ -295,6 +308,7 @@ app.on('before-quit', () => {
 });
 
 app.on("ready", () => {
+    if (!hasSingleInstanceLock) return;
     logStartupTiming("app_ready");
     if (isDev) {
         const sourceMapSupport = require("source-map-support"); // tslint:disable-line
