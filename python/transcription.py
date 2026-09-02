@@ -30,6 +30,11 @@ class TranscriptionProcessor:
     # Interval between "still working" status lines while a file is being
     # transcribed. Class-level so tests can shrink it.
     WORK_HEARTBEAT_SECONDS = 30.0
+    # Interval between "still loading" lines during model load, and how long
+    # without any download/phase activity before the loading heartbeat stops
+    # reassuring and points at the network instead.
+    LOAD_HEARTBEAT_SECONDS = 20.0
+    LOAD_STALL_SECONDS = 120.0
 
     def __init__(self, progress_callback: Optional[Callable[[str], None]] = None,
                  completion_callback: Optional[Callable[[Dict[str, Any]], None]] = None):
@@ -51,6 +56,9 @@ class TranscriptionProcessor:
         self._last_percent = -1.0
         self._loading_phase = "starting speech runtime"
         self._loading_started = 0.0
+        # Last time the load visibly moved (phase change or download bytes);
+        # read by the loading heartbeat's stall escalation.
+        self._load_activity_at = 0.0
         # Per-file work phase for the heartbeat: recognition loops report a
         # fraction (and get stall detection); decode/alignment/diarization
         # phases have no fraction and get plain elapsed-time lines.
@@ -65,6 +73,7 @@ class TranscriptionProcessor:
     def _set_loading_phase(self, phase: str) -> None:
         """Record and display the precise model-loading stage."""
         self._loading_phase = phase
+        self._load_activity_at = time.monotonic()
         elapsed = time.monotonic() - self._loading_started if self._loading_started else 0.0
         self._emit("⏳ %s (%.1f s elapsed)..." % (phase, elapsed))
 
@@ -109,6 +118,7 @@ class TranscriptionProcessor:
         live-updating row, so this reads as a progress bar in the UI. When the
         size is unknown, fall back to a line every 25 MB so long downloads
         still visibly move."""
+        self._load_activity_at = time.monotonic()  # bytes are flowing
         if total:
             pct = int(downloaded * 100 / total)
             if pct != state.get("last"):
@@ -297,6 +307,33 @@ class TranscriptionProcessor:
 
         return _cm()
 
+    def _network_timeout(self):
+        """Context manager: apply a default socket timeout while model
+        weights may be fetched. whisperx's and whisper's weight fetches pass
+        no timeout at all, so on a firewalled/proxied lab network a dropped
+        connection hangs the load forever (2026-09-02 WhisperX 40-minute
+        report); with a default timeout it becomes a clear error instead.
+        Slow-but-flowing downloads are unaffected — the timeout applies per
+        socket operation, not to the whole transfer."""
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _cm():
+            import socket
+            try:
+                seconds = float(os.environ.get("TINYEXPLORER_NETWORK_TIMEOUT", "60"))
+            except ValueError:
+                seconds = 60.0
+            previous = socket.getdefaulttimeout()
+            if seconds > 0:
+                socket.setdefaulttimeout(seconds)
+            try:
+                yield
+            finally:
+                socket.setdefaulttimeout(previous)
+
+        return _cm()
+
     def _set_work_phase(self, phase: str, tracks_fraction: bool) -> None:
         """Label the current per-file stage for the work heartbeat."""
         self._work_phase = phase
@@ -383,23 +420,38 @@ class TranscriptionProcessor:
         self._emit("🎤 Loading transcription model '%s' (first use may download model weights)..." % model_name)
         self._loading_started = time.monotonic()
         self._loading_phase = "starting speech runtime"
+        self._load_activity_at = time.monotonic()
         # Importing the speech libraries alone takes ~45 s even on a fast
         # machine (torch + pyannote + lightning for WhisperX), and antivirus
         # cold-scans can stretch that to minutes of silence that users read
-        # as a hang. Heartbeat until the load returns.
+        # as a hang. Heartbeat until the load returns — but once nothing has
+        # visibly moved for LOAD_STALL_SECONDS, stop reassuring and point at
+        # the likely cause (2026-09-02 lab report: WhisperX sat in the load
+        # phase for 40+ minutes on a filtered network while we kept printing
+        # "the app is not stuck").
         heartbeat_stop = threading.Event()
 
         def _heartbeat() -> None:
-            waited = 0
-            while not heartbeat_stop.wait(20):
-                waited += 20
-                self._emit("⏳ Still loading %s (%d s; %s) — first load is slow while the speech "
-                           "libraries are read and scanned; the app is not stuck..."
-                           % (variant, waited, self._loading_phase))
+            waited = 0.0
+            while not heartbeat_stop.wait(self.LOAD_HEARTBEAT_SECONDS):
+                waited += self.LOAD_HEARTBEAT_SECONDS
+                quiet_for = time.monotonic() - self._load_activity_at
+                if quiet_for >= self.LOAD_STALL_SECONDS:
+                    self._emit("⏳ Still loading %s (%.0f s; %s) — no download or loading "
+                               "activity for %.0f s. A firewall or proxy may be blocking "
+                               "model downloads (huggingface.co / github.com). If this keeps "
+                               "repeating, press Stop, check the network, and use "
+                               "'Copy log for bug report'."
+                               % (variant, waited, self._loading_phase, quiet_for))
+                else:
+                    self._emit("⏳ Still loading %s (%.0f s; %s) — first load is slow while the speech "
+                               "libraries are read and scanned; the app is not stuck..."
+                               % (variant, waited, self._loading_phase))
 
         threading.Thread(target=_heartbeat, daemon=True).start()
         try:
-            self._load_model_impl(variant, model_name)
+            with self._network_timeout():
+                self._load_model_impl(variant, model_name)
         finally:
             heartbeat_stop.set()
         elapsed = time.monotonic() - self._loading_started
@@ -572,18 +624,19 @@ class TranscriptionProcessor:
                     candidates.insert(0, override)
                 self._emit("🗣️ Loading speaker diarization model (first use downloads weights)...")
                 last_error: Optional[Exception] = None
-                for model_name in candidates:
-                    kwargs: Dict[str, Any] = {token_kwarg: self._hf_token(), "device": device}
-                    if model_name:
-                        kwargs["model_name"] = model_name
-                    try:
-                        with self._hf_download_progress("speaker diarization model"):
-                            self._diarizer = DiarizationPipeline(**kwargs)
-                        break
-                    except Exception as exc:
-                        last_error = exc
-                        self._emit("⚠️ Diarization model %s not accessible; trying the next option..."
-                                   % (model_name or "(whisperx default)"))
+                with self._network_timeout():
+                    for model_name in candidates:
+                        kwargs: Dict[str, Any] = {token_kwarg: self._hf_token(), "device": device}
+                        if model_name:
+                            kwargs["model_name"] = model_name
+                        try:
+                            with self._hf_download_progress("speaker diarization model"):
+                                self._diarizer = DiarizationPipeline(**kwargs)
+                            break
+                        except Exception as exc:
+                            last_error = exc
+                            self._emit("⚠️ Diarization model %s not accessible; trying the next option..."
+                                       % (model_name or "(whisperx default)"))
                 if self._diarizer is None and last_error is not None:
                     raise last_error
             self._set_work_phase("identifying speakers", False)

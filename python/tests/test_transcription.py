@@ -776,5 +776,59 @@ class WorkHeartbeatTests(unittest.TestCase):
         self.assertFalse(any("may be stuck" in m for m in messages))
 
 
+class LoadStallDiagnosisTests(unittest.TestCase):
+    """2026-09-02 lab report: WhisperX sat in 'Loading WhisperX model and
+    voice-activity pipeline' for 40+ minutes while the heartbeat kept
+    promising 'the app is not stuck'. On managed lab networks the weight
+    fetches (huggingface.co / github.com) can hang at the socket level with
+    no timeout. Loading must (a) stop reassuring once nothing has moved for
+    a while and point at the network instead, and (b) run under a default
+    socket timeout so those hangs become errors rather than lasting forever."""
+
+    def _load(self, impl):
+        messages = []
+        processor = TranscriptionProcessor(progress_callback=messages.append)
+        with mock.patch.multiple(TranscriptionProcessor,
+                                 LOAD_HEARTBEAT_SECONDS=0.02, LOAD_STALL_SECONDS=0.08), \
+                mock.patch.object(TranscriptionProcessor, "_load_model_impl", impl):
+            processor._load_model("WhisperX", "tiny")
+        return messages
+
+    def test_loading_heartbeat_escalates_when_nothing_moves(self):
+        messages = self._load(lambda self_, variant, name: time.sleep(0.3))
+        escalated = [m for m in messages if "firewall or proxy" in m]
+        self.assertTrue(escalated)
+        # The escalated line must stop promising that the app is not stuck.
+        self.assertFalse(any("not stuck" in m for m in escalated))
+
+    def test_loading_heartbeat_stays_calm_while_downloads_move(self):
+        def impl(self_, variant, name):
+            state = {}
+            for step in range(1, 11):
+                time.sleep(0.025)
+                self_._emit_download_progress("model.bin", step * 1048576, 10 * 1048576, state)
+
+        messages = self._load(impl)
+        self.assertFalse(any("firewall or proxy" in m for m in messages))
+        self.assertTrue(any("not stuck" in m for m in messages))
+
+    def test_load_runs_under_default_socket_timeout_and_restores(self):
+        import socket
+        observed = {}
+
+        def impl(self_, variant, name):
+            observed["timeout"] = socket.getdefaulttimeout()
+
+        previous = socket.getdefaulttimeout()
+        self._load(impl)
+        self.assertEqual(observed["timeout"], 60.0)
+        self.assertEqual(socket.getdefaulttimeout(), previous)
+
+        with mock.patch.dict(os.environ, {"TINYEXPLORER_NETWORK_TIMEOUT": "5"}):
+            self._load(impl)
+        self.assertEqual(observed["timeout"], 5.0)
+        self.assertEqual(socket.getdefaulttimeout(), previous)
+
+
 if __name__ == "__main__":
     unittest.main()
