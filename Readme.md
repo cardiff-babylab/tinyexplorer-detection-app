@@ -59,6 +59,32 @@ remain local.
 
 The app automatically downloads required model weights when needed.
 
+#### Speech performance (Windows)
+
+Measured 2026-09-02 with the bundled Windows build on a clean Windows 11 Pro
+VM (Azure `Standard_B4s_v2`: 4 vCPU, 16 GB RAM, Microsoft Defender active).
+Transcription time for a 58-second spoken-audio clip, CPU only, warm caches:
+
+| Backend        | tiny   | base  | small  |
+|----------------|--------|-------|--------|
+| Faster Whisper | 2.9 s  | 6.1 s | 16.5 s |
+| OpenAI Whisper | 14.7 s | 9.2 s | 26.3 s |
+| WhisperX       | 4.1 s  | 6.1 s | 16.0 s |
+
+Even the small model runs at roughly 3.5x realtime on laptop-class hardware
+with Faster Whisper or WhisperX. Model load adds about 1-5 s per file batch
+(~10 s for WhisperX, which also initialises a voice-activity pipeline), and
+the first run of each backend downloads model weights (up to ~90 s extra for
+WhisperX). OpenAI Whisper runs fp32 on CPU and may re-decode segments with
+temperature fallbacks, so its times vary more between runs and larger models
+are markedly slower — prefer Faster Whisper or WhisperX for long recordings.
+
+Note: on a freshly installed Windows the app additionally requires the
+Microsoft Visual C++ Redistributable (x64) — without it the detection and
+speech backends fail to start. Installers built after 2026-09-01 detect and
+install it automatically; for older builds, install it manually from
+https://aka.ms/vs/17/release/vc_redist.x64.exe.
+
 ### Model Sources
 - YOLO face weights: https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models (originally from https://github.com/akanametov/yolo-face)
 - RetinaFace implementation: https://github.com/serengil/retinaface
