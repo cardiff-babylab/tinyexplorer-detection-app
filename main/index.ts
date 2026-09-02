@@ -9,6 +9,7 @@ if (process.platform === "linux" && (process.env.APPIMAGE || process.env.APPDIR)
 }
 
 import { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } from "electron"; // tslint:disable-line
+import * as os from "os";
 import * as path from "path";
 import * as fs from "fs";
 import * as https from "https";
@@ -73,7 +74,6 @@ app.disableHardwareAcceleration();
 
 // Mitigate Windows cache permission issues when running from protected folders (e.g., OneDrive)
 if (process.platform === 'win32') {
-    const os = require('os');
     const userData = path.join(os.homedir(), 'AppData', 'Roaming', 'TinyExplorer Detection App');
     app.setPath('userData', userData);
     app.setPath('cache', path.join(userData, 'Cache'));
@@ -223,6 +223,46 @@ ipcMain.handle("check-for-updates", async (): Promise<UpdateInfo> => {
         console.warn("[update-check] Unexpected error during update check:", error);
         return { currentVersion: app.getVersion(), latestVersion: null, updateAvailable: false, releaseUrl: null, releaseName: null, checked: false };
     }
+});
+
+// App + system metadata for the renderer's "copy log for bug report" button.
+// Only static, non-identifying hardware/OS facts — no hostnames, usernames or
+// network info.
+interface DebugInfo {
+    appVersion: string;
+    platform: string;
+    arch: string;
+    osRelease: string;
+    osVersion: string; // human-readable (e.g. "15.6" on macOS, "10.0.26100" on Windows); "" if unavailable
+    cpuModel: string;
+    cpuCount: number;
+    totalMemoryGB: number;
+    electronVersion: string;
+    nodeVersion: string;
+}
+
+ipcMain.handle("get-debug-info", (): DebugInfo => {
+    let osVersion = "";
+    try {
+        osVersion = typeof (process as any).getSystemVersion === "function"
+            ? (process as any).getSystemVersion()
+            : "";
+    } catch (e) {
+        // Older Electron without getSystemVersion — os.release() still gets reported.
+    }
+    const cpus = os.cpus();
+    return {
+        appVersion: app.getVersion(),
+        platform: process.platform,
+        arch: process.arch,
+        osRelease: os.release(),
+        osVersion,
+        cpuModel: cpus.length > 0 ? cpus[0].model.trim() : "unknown",
+        cpuCount: cpus.length,
+        totalMemoryGB: Math.round(os.totalmem() / (1024 * 1024 * 1024)),
+        electronVersion: process.versions.electron || "unknown",
+        nodeVersion: process.versions.node || "unknown",
+    };
 });
 
 // Open an external https URL (e.g. the GitHub release page) in the default

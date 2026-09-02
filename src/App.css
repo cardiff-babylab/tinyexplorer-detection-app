@@ -415,6 +415,30 @@
   -ms-user-select: text !important;
 }
 
+/* Pins the "copy log for bug report" button to the bottom right of the
+   progress panel. */
+.progress-panel-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.copy-log-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #495057;
+  background-color: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.copy-log-btn:hover {
+  background-color: #f1f3f5;
+  border-color: #c6ccd2;
+}
+
 .empty-state {
   display: flex;
   align-items: center;
