@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import importlib
 import os
+import sys
 import threading
 import time
 from datetime import datetime
@@ -410,17 +411,21 @@ class TranscriptionProcessor:
         for the copy-log bug report. The 2026-09-03 field hang came down to
         torch CPU inference stalling on a hybrid P/E-core machine, and no
         report carried the thread count or OMP settings needed to see that.
-        Best-effort: a missing library must never fail the load."""
+        Reads only libraries the backend import already loaded (whisper and
+        whisperx pull in torch, faster_whisper pulls in ctranslate2) — a
+        diagnostics line must never trigger a heavy import of its own."""
         import platform
         parts = ["Python %s" % platform.python_version()]
         try:
             if variant == "Faster Whisper":
-                import ctranslate2
-                parts.append("ctranslate2 %s" % getattr(ctranslate2, "__version__", "unknown"))
+                ct2 = sys.modules.get("ctranslate2")
+                if ct2 is not None:
+                    parts.append("ctranslate2 %s" % getattr(ct2, "__version__", "unknown"))
             else:
-                import torch
-                parts.append("torch %s" % getattr(torch, "__version__", "unknown"))
-                parts.append("%d torch CPU threads" % torch.get_num_threads())
+                torch = sys.modules.get("torch")
+                if torch is not None:
+                    parts.append("torch %s" % getattr(torch, "__version__", "unknown"))
+                    parts.append("%d torch CPU threads" % torch.get_num_threads())
         except Exception:
             pass
         overrides = ["%s=%s" % (key, os.environ[key]) for key in sorted(os.environ)

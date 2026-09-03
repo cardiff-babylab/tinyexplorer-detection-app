@@ -863,8 +863,10 @@ class RuntimeInfoTests(unittest.TestCase):
         self.assertEqual(len(lines), 1)
         self.assertIn("ctranslate2 4.8.2-test", lines[0])
 
-    def test_missing_library_still_reports_python_and_env(self):
-        # torch absent entirely: the line must degrade, not fail the load.
+    def test_unimported_library_still_reports_python_and_env(self):
+        # torch not loaded: the line must degrade rather than import it —
+        # a fresh torch import inside mock.patch.dict(sys.modules) evicted
+        # numpy on exit and poisoned the whole CI test run with a reload.
         with mock.patch.dict(sys.modules, {"torch": None}):
             lines = self._load("WhisperX", {"whisperx": _fake_whisperx_module()})
         self.assertEqual(len(lines), 1)
