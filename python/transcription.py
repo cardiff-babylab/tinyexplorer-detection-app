@@ -405,6 +405,30 @@ class TranscriptionProcessor:
         finally:
             self._set_work_phase(*previous)
 
+    def _emit_runtime_info(self, variant: str) -> None:
+        """One-line library/threading summary for the progress log, and thus
+        for the copy-log bug report. The 2026-09-03 field hang came down to
+        torch CPU inference stalling on a hybrid P/E-core machine, and no
+        report carried the thread count or OMP settings needed to see that.
+        Best-effort: a missing library must never fail the load."""
+        import platform
+        parts = ["Python %s" % platform.python_version()]
+        try:
+            if variant == "Faster Whisper":
+                import ctranslate2
+                parts.append("ctranslate2 %s" % getattr(ctranslate2, "__version__", "unknown"))
+            else:
+                import torch
+                parts.append("torch %s" % getattr(torch, "__version__", "unknown"))
+                parts.append("%d torch CPU threads" % torch.get_num_threads())
+        except Exception:
+            pass
+        overrides = ["%s=%s" % (key, os.environ[key]) for key in sorted(os.environ)
+                     if key.startswith(("OMP_", "KMP_", "MKL_"))
+                     or key == "TINYEXPLORER_TORCH_THREADS"]
+        parts.append("thread env: " + (", ".join(overrides) if overrides else "defaults"))
+        self._emit("🧵 Speech runtime: %s" % "; ".join(parts))
+
     @staticmethod
     def _device() -> str:
         return "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES", "") not in ("", "-1") else "cpu"
@@ -466,6 +490,7 @@ class TranscriptionProcessor:
         if variant == "Whisper (OpenAI)":
             self._set_loading_phase("Importing OpenAI Whisper")
             import whisper
+            self._emit_runtime_info(variant)
             self._set_loading_phase("Checking OpenAI Whisper model weights")
             self._ensure_openai_whisper_weights(model_name)
             self._set_loading_phase("Loading OpenAI Whisper checkpoint into memory")
@@ -473,6 +498,7 @@ class TranscriptionProcessor:
         elif variant == "Faster Whisper":
             self._set_loading_phase("Importing Faster Whisper")
             from faster_whisper import WhisperModel
+            self._emit_runtime_info(variant)
             device = self._device()
             compute = "float16" if device == "cuda" else "int8"
             self._set_loading_phase("Loading Faster Whisper model")
@@ -481,6 +507,7 @@ class TranscriptionProcessor:
         elif variant == "WhisperX":
             self._set_loading_phase("Importing WhisperX and speech libraries")
             import whisperx
+            self._emit_runtime_info(variant)
             device = self._device()
             self._set_loading_phase("Loading WhisperX model and voice-activity pipeline")
             with self._hf_download_progress("WhisperX %s" % model_name):

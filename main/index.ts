@@ -239,7 +239,16 @@ interface DebugInfo {
     totalMemoryGB: number;
     electronVersion: string;
     nodeVersion: string;
+    threadEnv: string; // set thread/OpenMP overrides inherited by the Python backend; "" if none
 }
+
+// Env vars that shape the Python backend's CPU threading (OpenMP/MKL/torch).
+// Reported in the bug-report log because a 2026-09-03 field hang was a torch
+// thread-pool stall that no report carried enough context to diagnose.
+const THREAD_ENV_VARS = [
+    "OMP_NUM_THREADS", "OMP_WAIT_POLICY", "KMP_AFFINITY", "KMP_BLOCKTIME",
+    "MKL_NUM_THREADS", "TINYEXPLORER_TORCH_THREADS", "CUDA_VISIBLE_DEVICES",
+];
 
 ipcMain.handle("get-debug-info", (): DebugInfo => {
     let osVersion = "";
@@ -262,6 +271,10 @@ ipcMain.handle("get-debug-info", (): DebugInfo => {
         totalMemoryGB: Math.round(os.totalmem() / (1024 * 1024 * 1024)),
         electronVersion: process.versions.electron || "unknown",
         nodeVersion: process.versions.node || "unknown",
+        threadEnv: THREAD_ENV_VARS
+            .filter((key) => process.env[key] !== undefined && process.env[key] !== "")
+            .map((key) => `${key}=${process.env[key]}`)
+            .join(", "),
     };
 });
 

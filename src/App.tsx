@@ -827,6 +827,7 @@ const App = () => {
                 lines.push(`- CPU: ${info.cpuModel} (${info.cpuCount} cores)`);
                 lines.push(`- Memory: ${info.totalMemoryGB} GB`);
                 lines.push(`- Electron ${info.electronVersion} / Node ${info.nodeVersion}`);
+                lines.push(`- Thread env: ${info.threadEnv || "(defaults)"}`);
             } else {
                 lines.push(`- User agent: ${navigator.userAgent}`);
             }

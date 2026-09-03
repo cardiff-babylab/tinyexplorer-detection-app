@@ -830,5 +830,47 @@ class LoadStallDiagnosisTests(unittest.TestCase):
         self.assertEqual(socket.getdefaulttimeout(), previous)
 
 
+class RuntimeInfoTests(unittest.TestCase):
+    """2026-09-03 field hang: torch CPU inference stalled on a hybrid
+    P/E-core machine, but the copy-log bug report carried no thread counts
+    or OMP settings, so diagnosis needed another round-trip. Each backend
+    load must put a runtime line into the progress log."""
+
+    def _load(self, variant, modules, env=None):
+        messages = []
+        processor = TranscriptionProcessor(progress_callback=messages.append)
+        with mock.patch.dict(sys.modules, modules), \
+                mock.patch.dict(os.environ, env or {}):
+            processor._load_model(variant, "tiny")
+        return [m for m in messages if m.startswith("🧵 Speech runtime:")]
+
+    def test_torch_backends_report_version_threads_and_env(self):
+        fake_torch = types.SimpleNamespace(__version__="2.8.0+test",
+                                           get_num_threads=lambda: 7)
+        lines = self._load("Whisper (OpenAI)",
+                           {"whisper": _fake_whisper_module(), "torch": fake_torch},
+                           env={"OMP_NUM_THREADS": "3"})
+        self.assertEqual(len(lines), 1)
+        self.assertIn("torch 2.8.0+test", lines[0])
+        self.assertIn("7 torch CPU threads", lines[0])
+        self.assertIn("OMP_NUM_THREADS=3", lines[0])
+
+    def test_faster_whisper_reports_ctranslate2(self):
+        fake_ct2 = types.SimpleNamespace(__version__="4.8.2-test")
+        lines = self._load("Faster Whisper",
+                           {"faster_whisper": _fake_faster_whisper_module(),
+                            "ctranslate2": fake_ct2})
+        self.assertEqual(len(lines), 1)
+        self.assertIn("ctranslate2 4.8.2-test", lines[0])
+
+    def test_missing_library_still_reports_python_and_env(self):
+        # torch absent entirely: the line must degrade, not fail the load.
+        with mock.patch.dict(sys.modules, {"torch": None}):
+            lines = self._load("WhisperX", {"whisperx": _fake_whisperx_module()})
+        self.assertEqual(len(lines), 1)
+        self.assertIn("Python ", lines[0])
+        self.assertIn("thread env:", lines[0])
+
+
 if __name__ == "__main__":
     unittest.main()
