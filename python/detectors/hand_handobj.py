@@ -1,12 +1,12 @@
-"""HandObject hand detector (100DOH Faster R-CNN res101 baseline).
+"""HandObject hand detector (100DOH Faster R-CNN res101).
 
-Registers a single selectable checkpoint:
+Registers two selectable checkpoints:
 
 * ``HandObject-Baseline`` – original 100DOH baseline (no ownership).
-
-The 100DOH-TinyExplorer-Tuned checkpoint (own/other ownership head) is
-deliberately not registered for now: access to models trained on infant data
-is restricted while a responsible-access policy is agreed.
+* ``HandObject-Tuned``   – 100DOH-TinyExplorer-Tuned, includes own/other
+  ownership head. Trained on infant data, so it lives in a manually gated
+  Hugging Face repo: downloading it requires a personal HF token from an
+  account that has been granted access (mirrors the speech diarization flow).
 
 The ~361 MB checkpoints are **not** bundled; they are downloaded on first use to
 the app's model-cache directory (mirroring how the YOLO/RetinaFace weights are
@@ -25,9 +25,11 @@ import importlib.util
 import logging
 import os
 import shutil
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Dict, List, Optional
+from urllib.parse import urlparse
 
 import numpy as np
 
@@ -54,22 +56,54 @@ _DEFAULT_WEIGHTS_BASE_URL = (
 )
 
 
+def _hf_token() -> str:
+    """Personal Hugging Face token for gated checkpoints (same env contract as
+    the speech diarization flow in transcription.py)."""
+    return os.environ.get("TINYEXPLORER_HF_TOKEN") or os.environ.get("HF_TOKEN") or ""
+
+
 @dataclass(frozen=True)
 class _VariantSpec:
     filename: str
     has_ownership: bool
     sha256: Optional[str] = None  # if set, downloaded weights are verified against it
+    # When set, the checkpoint is fetched from this gated Hugging Face repo
+    # (with the user's token) instead of the public GitHub Release.
+    hf_repo: Optional[str] = None
 
 
-# variant name -> checkpoint spec. sha256 values are of the assets hosted on the
-# handobj-weights-v1 GitHub Release; downloads are verified against them.
+# variant name -> checkpoint spec. sha256 values are of the hosted assets
+# (GitHub Release for the baseline, the gated HF repo's LFS object for the
+# tuned checkpoint); downloads are verified against them.
 _VARIANTS: Dict[str, _VariantSpec] = {
     "HandObject-Baseline": _VariantSpec(
         filename="faster_rcnn_1_8_132028.pth",
         has_ownership=False,
         sha256="3444e3b992417cb6adfcd71539ca8c92602c21a3e2fdfff4628dbdbdf8a2dd03",
     ),
+    "HandObject-Tuned": _VariantSpec(
+        filename="faster_rcnn_1_15_2739.pth",
+        has_ownership=True,
+        sha256="56c4aa5dc973eb28b9d07266fcb0aaff8f96f9e9ca9afe7c3b85034513093d13",
+        hf_repo="ThompsonC21/100DOH-TinyExplorer-Tuned-hand-detection",
+    ),
 }
+
+
+class _CrossHostAuthStripper(urllib.request.HTTPRedirectHandler):
+    """Drop the Authorization header when a download redirects across hosts.
+
+    huggingface.co answers gated ``/resolve/`` requests with a redirect to a
+    signed CDN URL; some storage backends reject requests that carry both a
+    signed URL and an auth header, and the token should not travel further
+    than huggingface.co anyway.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and urlparse(newurl).netloc != urlparse(req.full_url).netloc:
+            new.remove_header("Authorization")
+        return new
 
 
 @register_detector("hand_handobj")
@@ -78,7 +112,9 @@ class HandObjectDetector(VisionDetector):
 
     name = "hand"
     mode = "hand"
-    variants = ["HandObject-Baseline"]
+    # Baseline first: it is the token-free default; the gated tuned
+    # checkpoint is an explicit opt-in.
+    variants = ["HandObject-Baseline", "HandObject-Tuned"]
 
     def __init__(self, progress_callback=None) -> None:
         super().__init__(progress_callback)
@@ -107,18 +143,43 @@ class HandObjectDetector(VisionDetector):
                 self._emit(f"📁 Using local HandObject weights: {local_path}")
                 return local_path
 
-        url = f"{self._weights_base_url()}/{spec.filename}"
+        headers: Optional[Dict[str, str]] = None
+        if spec.hf_repo:
+            token = _hf_token()
+            if not token:
+                self._emit(
+                    f"❌ The {self._loaded_variant or spec.filename} weights are "
+                    "gated on Hugging Face and need your personal access token. "
+                    "Set it via the 🔑 button in the app (or the "
+                    "TINYEXPLORER_HF_TOKEN environment variable) and try again."
+                )
+                return None
+            url = f"https://huggingface.co/{spec.hf_repo}/resolve/main/{spec.filename}"
+            headers = {"Authorization": f"Bearer {token}"}
+        else:
+            url = f"{self._weights_base_url()}/{spec.filename}"
+
         self._emit(f"⏳ Downloading {self._loaded_variant or spec.filename}: 0%")
         try:
-            self._download_with_progress(url, target)
+            self._download_with_progress(url, target, headers)
         except Exception as e:
-            self._emit(f"❌ Failed to download HandObject weights from {url}: {e}")
-            # Clean up a partial file so a retry starts fresh.
-            if os.path.exists(target):
-                try:
-                    os.remove(target)
-                except OSError:
-                    pass
+            if (spec.hf_repo and isinstance(e, urllib.error.HTTPError)
+                    and e.code in (401, 403)):
+                self._emit(
+                    f"❌ Hugging Face refused the download (HTTP {e.code}). Your "
+                    "token may be invalid, or your account has not been granted "
+                    f"access to https://huggingface.co/{spec.hf_repo} yet — "
+                    "request access there with the account that issued the token."
+                )
+            else:
+                self._emit(f"❌ Failed to download HandObject weights from {url}: {e}")
+            # Clean up partial files so a retry starts fresh.
+            for leftover in (target, target + ".part"):
+                if os.path.exists(leftover):
+                    try:
+                        os.remove(leftover)
+                    except OSError:
+                        pass
             return None
 
         if spec.sha256 and not self._verify_sha256(target, spec.sha256):
@@ -130,9 +191,13 @@ class HandObjectDetector(VisionDetector):
             return None
         return target
 
-    def _download_with_progress(self, url: str, target: str) -> None:
+    def _download_with_progress(
+        self, url: str, target: str, headers: Optional[Dict[str, str]] = None
+    ) -> None:
         tmp = target + ".part"
-        with urllib.request.urlopen(url) as resp:  # nosec - fixed release host
+        req = urllib.request.Request(url, headers=headers or {})  # nosec - fixed hosts
+        opener = urllib.request.build_opener(_CrossHostAuthStripper)
+        with opener.open(req) as resp:
             total = int(resp.headers.get("Content-Length", 0))
             downloaded = 0
             last_pct = -1

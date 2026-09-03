@@ -190,9 +190,10 @@ class SubprocessAPI:
                                 'message': 'A processing job is already running. '
                                            'Stop it and wait for it to finish first.'}
 
-                    # Personal Hugging Face token for gated diarization models.
-                    # Env-only handoff: popped before any further use of the
-                    # payload so it cannot reach logs or result files.
+                    # Personal Hugging Face token for gated models (speech
+                    # diarization, tuned hand weights). Env-only handoff:
+                    # popped before any further use of the payload so it
+                    # cannot reach logs or result files.
                     hf_token = data.pop('hf_token', None)
                     if hf_token:
                         os.environ['TINYEXPLORER_HF_TOKEN'] = str(hf_token)
