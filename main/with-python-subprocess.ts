@@ -579,12 +579,16 @@ const sendCommandToPython = async (command: any, callback?: Function) => {
     }
 };
 
-// --- Hugging Face token (speaker diarization) ----------------------------
-// The token is a personal credential for the gated pyannote models. It is
-// stored encrypted via Electron safeStorage (Keychain-backed key on macOS),
-// decrypted only in memory, attached to start_processing payloads for speech
-// models AFTER logging, and always redacted from logs and echoes.
+// --- Hugging Face token (speaker diarization + gated hand weights) --------
+// The token is a personal credential for the gated pyannote models and the
+// gated tuned hand checkpoint. It is stored encrypted via Electron
+// safeStorage (Keychain-backed key on macOS), decrypted only in memory,
+// attached to start_processing payloads for the models below AFTER logging,
+// and always redacted from logs and echoes.
 const TRANSCRIPTION_MODELS = ["Whisper (OpenAI)", "Faster Whisper", "WhisperX"];
+// Speech uses the token optionally (speaker column); HandObject-Tuned cannot
+// download its weights at all without it.
+const HF_TOKEN_MODELS = TRANSCRIPTION_MODELS.concat(["HandObject-Tuned"]);
 const hfTokenFile = () => path.join(app.getPath("userData"), "hf-token.enc");
 
 const getStoredHfToken = (): string => {
@@ -636,9 +640,9 @@ ipcMain.handle("set-hf-token", (event: any, token: any) => {
 ipcMain.on("python-command", (event: any, command: any) => {
     try { console.log("Received IPC command:", redactCommand(command)); } catch (e) {}
 
-    // Attach the token only after logging, and only for speech jobs.
+    // Attach the token only after logging, and only for jobs that use it.
     if (command && command.type === "start_processing" && command.data &&
-            TRANSCRIPTION_MODELS.indexOf(command.data.model) !== -1) {
+            HF_TOKEN_MODELS.indexOf(command.data.model) !== -1) {
         const hfToken = getHfToken();
         if (hfToken) {
             command = { ...command, data: { ...command.data, hf_token: hfToken } };
