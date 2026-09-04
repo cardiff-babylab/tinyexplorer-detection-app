@@ -59,6 +59,45 @@ remain local.
 
 The app automatically downloads required model weights when needed.
 
+#### Speech performance (Windows)
+
+Measured 2026-09-02 with the bundled Windows build on a clean Windows 11 Pro
+VM (Azure `Standard_B4s_v2`: 4 vCPU, 16 GB RAM, Microsoft Defender active).
+Transcription time for a 64-second spoken-audio clip, CPU only, warm caches:
+
+| Model          | Faster Whisper | OpenAI Whisper | WhisperX |
+|----------------|----------------|----------------|----------|
+| tiny           | 3.5 s          | 8.2 s          | 3.9 s    |
+| base           | 6.6 s          | 9.9 s          | 6.0 s    |
+| small          | 19.2 s         | 23.1 s         | 15.3 s   |
+| medium         | 56.5 s         | 63.3 s         | 42.0 s   |
+| large-v2       | 97.9 s         | 114.4 s        | 73.4 s   |
+| large-v3       | 97.0 s         | 114.9 s        | 72.1 s   |
+| large-v3-turbo | 56.4 s         | 200.2 s *      | 51.1 s   |
+
+\* OpenAI Whisper runs fp32 on CPU; with large-v3-turbo it fell into
+temperature-fallback re-decoding and hallucinated extra text — avoid that
+combination on CPU-only machines.
+
+Reading the table: the default `small` runs at 3-4x realtime on all backends;
+WhisperX is the fastest backend from `medium` up (batched inference) and even
+`large-v3` stays close to realtime with it. Warm model load adds roughly 1-10 s
+per run (WhisperX 9-20 s, since it also initialises a voice-activity pipeline;
+OpenAI Whisper large ~20 s).
+
+Cold start — the very first use of a model — additionally downloads weights
+and warms caches: a few seconds for tiny/base, ~10 s for small, ~30-60 s for
+medium, and ~1-2.5 min for the large variants (~3 GB download each) on a fast
+connection; WhisperX's first-ever run adds a further one-off ~100 s of
+pipeline initialisation. During this phase the app can look idle — that is
+the "first use may download model weights" stage, not a hang.
+
+Note: on a freshly installed Windows the app additionally requires the
+Microsoft Visual C++ Redistributable (x64) — without it the detection and
+speech backends fail to start. Installers built after 2026-09-01 detect and
+install it automatically; for older builds, install it manually from
+https://aka.ms/vs/17/release/vc_redist.x64.exe.
+
 ### Model Sources
 - YOLO face weights: https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models (originally from https://github.com/akanametov/yolo-face)
 - RetinaFace implementation: https://github.com/serengil/retinaface
