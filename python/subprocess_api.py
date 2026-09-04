@@ -32,6 +32,59 @@ if _TIMING_ENABLED:
         flush=True,
     )
 
+def _windows_stdin_lines():
+    """Yield stdin lines without ever leaving a blocking read pending.
+
+    On Windows a pending synchronous read keeps the stdin pipe handle busy,
+    and DLL initialization routines that query the standard handles (scipy's
+    Fortran/OpenBLAS extensions do) then block behind it while holding the
+    OS loader lock: the process deadlocks. That was the 2026-09-03/04
+    "speech stuck at 0%" class of field reports -- whisper's word-timestamp
+    path and whisperx's pyannote import both load scipy extensions from the
+    worker thread while this loop sits in a blocking read. A raw Win32
+    ReadFile deadlocks identically, so the only safe shape is to poll:
+    PeekNamedPipe never blocks, and os.read of the reported byte count
+    returns immediately, leaving the handle busy only for microseconds.
+    """
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle = kernel32.GetStdHandle(-10)  # STD_INPUT_HANDLE
+    FILE_TYPE_PIPE = 3
+    if kernel32.GetFileType(handle) != FILE_TYPE_PIPE:
+        # Interactive/console stdin (manual runs, some tests): PeekNamedPipe
+        # does not apply and the deadlock cannot occur without a pipe.
+        for line in iter(sys.stdin.readline, ''):
+            yield line
+        return
+
+    available = ctypes.c_ulong(0)
+    pending = b''
+    while True:
+        if not kernel32.PeekNamedPipe(handle, None, 0, None,
+                                      ctypes.byref(available), None):
+            break  # pipe broken: parent exited
+        if available.value == 0:
+            time.sleep(0.05)
+            continue
+        chunk = os.read(0, available.value)
+        if not chunk:
+            break
+        pending += chunk
+        while b'\n' in pending:
+            raw, pending = pending.split(b'\n', 1)
+            yield raw.decode('utf-8', 'replace')
+    if pending:
+        yield pending.decode('utf-8', 'replace')
+
+
+def _stdin_lines():
+    """Line iterator for the command loop; EOF ends the iteration."""
+    if os.name == 'nt':
+        return _windows_stdin_lines()
+    return iter(sys.stdin.readline, '')
+
+
 class SubprocessAPI:
     def __init__(self):
         self.face_processor = None
@@ -340,13 +393,15 @@ class SubprocessAPI:
             'startupMs': startup_ms,
         })
         
+        stdin_lines = _stdin_lines()
         while self.running:
             try:
-                # Read line from stdin
-                line = sys.stdin.readline()
-                if not line:
+                # Read line from stdin; None means EOF (blank lines are
+                # skipped by the strip/continue below).
+                line = next(stdin_lines, None)
+                if line is None:
                     break
-                    
+
                 line = line.strip()
                 if not line:
                     continue

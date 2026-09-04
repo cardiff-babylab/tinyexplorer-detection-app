@@ -874,5 +874,80 @@ class RuntimeInfoTests(unittest.TestCase):
         self.assertIn("thread env:", lines[0])
 
 
+def _scipy_available():
+    import importlib.util
+    return importlib.util.find_spec("scipy") is not None
+
+
+@unittest.skipUnless(os.name == "nt", "stdin pipe/DLL-load deadlock is Windows-specific")
+@unittest.skipUnless(_scipy_available(), "needs scipy's native extensions")
+class WindowsStdinDeadlockTests(unittest.TestCase):
+    """Regression tests for the 2026-09-04 stdin/scipy loader deadlock.
+
+    A thread blocked in a synchronous read on the stdin PIPE keeps the
+    handle busy; loading scipy's Fortran extensions then deadlocks behind
+    it while the loader lock is held. subprocess_api reads commands from
+    exactly such a pipe while transcription worker threads import scipy
+    lazily (whisper word timestamps -> numba -> scipy.linalg; whisperx ->
+    pyannote -> scipy.signal). Children are spawned with stdin held open
+    to recreate the Electron parent, and killed on timeout so a deadlock
+    can never wedge the test runner.
+    """
+
+    def _run_child(self, body, timeout):
+        import subprocess
+        proc = subprocess.Popen(
+            [sys.executable, "-c", body],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        try:
+            deadline = time.monotonic() + timeout
+            while time.monotonic() < deadline and proc.poll() is None:
+                time.sleep(0.2)
+            finished = proc.poll() is not None
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+            out = proc.communicate()[0]
+        return finished, out.decode("utf-8", "replace")
+
+    def test_blocking_stdin_read_deadlocks_scipy_import(self):
+        # The OLD reader shape must deadlock: this proves the harness can
+        # see the bug (and will flag a scipy/CPython change that removes
+        # it, at which point the polling reader could be retired).
+        finished, out = self._run_child(
+            "import sys, threading\n"
+            "threading.Thread(target=sys.stdin.readline, daemon=True).start()\n"
+            "import time; time.sleep(0.5)\n"
+            "import scipy.signal\n"
+            "print('imported', flush=True)\n",
+            timeout=15,
+        )
+        self.assertFalse(
+            finished,
+            "blocking stdin read no longer deadlocks scipy import (%s); the "
+            "polling reader in subprocess_api may be removable" % out.strip())
+
+    def test_polling_stdin_reader_survives_scipy_import(self):
+        finished, out = self._run_child(
+            "import sys, threading, time\n"
+            "sys.path.insert(0, '.')\n"
+            "from subprocess_api import _stdin_lines\n"
+            "def consume():\n"
+            "    for _ in _stdin_lines():\n"
+            "        pass\n"
+            "threading.Thread(target=consume, daemon=True).start()\n"
+            "time.sleep(0.5)\n"
+            "import scipy.signal\n"
+            "import scipy.linalg\n"
+            "print('imported', flush=True)\n",
+            timeout=60,
+        )
+        self.assertTrue(finished, "polling stdin reader still deadlocks scipy import: %s" % out.strip())
+        self.assertIn("imported", out)
+
+
 if __name__ == "__main__":
     unittest.main()
