@@ -126,7 +126,7 @@ If you have ideas for new features, improvements, or bug fixes, please feel free
 
 ### Install a Prebuilt Release (recommended)
 - Download the latest installer for your OS from the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases).
-- Run the installer and launch the app following the instructions from the [Getting started page](https://cardiff-babylab.github.io/tinyexplorer-detection-app/getting-started/).
+- Run the installer and launch the app following the instructions in the [Getting started page](https://cardiff-babylab.github.io/tinyexplorer-detection-app/getting-started/).
 
 ### Build and Run Locally (fallback)
 If no release exists for your system or the installer doesn't work, you can build locally.
