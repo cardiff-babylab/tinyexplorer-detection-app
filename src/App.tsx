@@ -1150,7 +1150,7 @@ const App = () => {
                             />
                             <button onClick={handleSelectResultsFolder} className="browse-btn">Select Results Folder</button>
                         </div>
-                        {isVideoFile && (
+                        {isVideoFile && selectedMode !== "speech" && (
                             <div className="file-info">
                                 <small><span role="img" aria-label="movie camera">🎬</span> Video file detected - will process 1 frame per second</small>
                             </div>
