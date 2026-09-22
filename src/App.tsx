@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./App.css";
+import { classifyDroppedPath, isDropAllowedForMode } from "./dropSelection";
 
 const ipcRenderer = (window as any).isInElectronRenderer
     ? (window as any).nodeRequire("electron").ipcRenderer
@@ -452,6 +453,36 @@ const App = () => {
             });
         }
     };
+
+    // Drag-and-drop file selection: dropping a file anywhere on the window
+    // mirrors the Browse File flow. What's accepted is defined by the active
+    // Mode selector (face/hand: images + videos, speech: audio + video). The
+    // preventDefault calls also stop Chromium's default drop action, which
+    // would navigate the window to the dropped file and wipe the UI.
+    useEffect(() => {
+        const handleDragOver = (event: DragEvent) => event.preventDefault();
+        const handleDrop = (event: DragEvent) => {
+            event.preventDefault();
+            const file = event.dataTransfer?.files?.[0];
+            if (!file) return;
+            // Electron exposes the OS path of a dragged-in file as File.path
+            // (Windows or POSIX style); the web harness only has the name.
+            const droppedPath = (file as any).path || file.name;
+            if (!isDropAllowedForMode(droppedPath, selectedMode)) {
+                console.log(`Ignoring dropped file not accepted in ${selectedMode} mode:`, droppedPath);
+                return;
+            }
+            console.log("User dropped file:", droppedPath);
+            setSelectedFolder(droppedPath);
+            setIsVideoFile(classifyDroppedPath(droppedPath) === "video");
+        };
+        window.addEventListener("dragover", handleDragOver);
+        window.addEventListener("drop", handleDrop);
+        return () => {
+            window.removeEventListener("dragover", handleDragOver);
+            window.removeEventListener("drop", handleDrop);
+        };
+    }, [selectedMode]);
 
     const getDisplayName = (modelName: string): string => {
         if (modelName === "RetinaFace") {
