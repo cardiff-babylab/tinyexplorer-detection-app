@@ -45,6 +45,9 @@ module.exports = defineConfig({
   webServer: {
     command: 'npm run react-start',
     port: 3000,
+    // CRA takes 1-3 min to boot on this machine (longer when the webpack
+    // cache is cold); the 60s default timed out.
+    timeout: 300 * 1000,
     reuseExistingServer: !process.env.CI,
     env: {
       NODE_OPTIONS: '--openssl-legacy-provider'
