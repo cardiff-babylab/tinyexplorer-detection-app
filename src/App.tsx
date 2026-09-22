@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./App.css";
+import { classifyDroppedPath, isDropAllowedForMode } from "./dropSelection";
 
 const ipcRenderer = (window as any).isInElectronRenderer
     ? (window as any).nodeRequire("electron").ipcRenderer
@@ -460,6 +461,36 @@ const App = () => {
         }
     };
 
+    // Drag-and-drop file selection: dropping a file anywhere on the window
+    // mirrors the Browse File flow. What's accepted is defined by the active
+    // Mode selector (face/hand: images + videos, speech: audio + video). The
+    // preventDefault calls also stop Chromium's default drop action, which
+    // would navigate the window to the dropped file and wipe the UI.
+    useEffect(() => {
+        const handleDragOver = (event: DragEvent) => event.preventDefault();
+        const handleDrop = (event: DragEvent) => {
+            event.preventDefault();
+            const file = event.dataTransfer?.files?.[0];
+            if (!file) return;
+            // Electron exposes the OS path of a dragged-in file as File.path
+            // (Windows or POSIX style); the web harness only has the name.
+            const droppedPath = (file as any).path || file.name;
+            if (!isDropAllowedForMode(droppedPath, selectedMode)) {
+                console.log(`Ignoring dropped file not accepted in ${selectedMode} mode:`, droppedPath);
+                return;
+            }
+            console.log("User dropped file:", droppedPath);
+            setSelectedFolder(droppedPath);
+            setIsVideoFile(classifyDroppedPath(droppedPath) === "video");
+        };
+        window.addEventListener("dragover", handleDragOver);
+        window.addEventListener("drop", handleDrop);
+        return () => {
+            window.removeEventListener("dragover", handleDragOver);
+            window.removeEventListener("drop", handleDrop);
+        };
+    }, [selectedMode]);
+
     const getDisplayName = (modelName: string): string => {
         if (modelName === "RetinaFace") {
             return "RetinaFace";
@@ -468,6 +499,9 @@ const App = () => {
         // Hand detection models
         if (modelName === "HandObject-Baseline") {
             return "HandObject (100DOH baseline)";
+        }
+        if (modelName === "HandObject-Tuned") {
+            return "HandObject (100DOH-TinyExplorer-Tuned)";
         }
 
         // Handle YOLO face models
@@ -651,19 +685,30 @@ const App = () => {
         }
     }, [availableModels, detectorRegistry, modelModes]);
 
-    // Modal state for the speaker-diarization Hugging Face token. The token
-    // itself never lives in renderer state beyond the input field: it is sent
-    // to the main process for Keychain-backed storage and cleared immediately.
+    // Modal state for the Hugging Face token (used by speech diarization and
+    // by the gated tuned hand checkpoint). The token itself never lives in
+    // renderer state beyond the input field: it is sent to the main process
+    // for Keychain-backed storage and cleared immediately.
     const [hfTokenModalOpen, setHfTokenModalOpen] = useState(false);
     const [hfTokenInput, setHfTokenInput] = useState("");
     const [hfTokenError, setHfTokenError] = useState("");
     const [hfTokenPromptToStart, setHfTokenPromptToStart] = useState(false);
+    // Speech treats the token as optional (only the speaker column needs it);
+    // the tuned hand model cannot download its gated weights without one, so
+    // in "required" mode the modal drops the continue-without escape hatch.
+    const [hfTokenRequired, setHfTokenRequired] = useState(false);
+
+    // Gated repo hosting the tuned hand weights; users must be granted access
+    // there before their token works.
+    const HAND_TUNED_HF_URL =
+        "https://huggingface.co/ThompsonC21/100DOH-TinyExplorer-Tuned-hand-detection";
 
     const closeHfTokenModal = () => {
         setHfTokenModalOpen(false);
         setHfTokenInput("");
         setHfTokenError("");
         setHfTokenPromptToStart(false);
+        setHfTokenRequired(false);
     };
 
     const handleSaveHfToken = async () => {
@@ -690,6 +735,12 @@ const App = () => {
     const handleOpenHfTokenHelp = () => {
         if (ipcRenderer && typeof ipcRenderer.invoke === "function") {
             ipcRenderer.invoke("open-external", "https://huggingface.co/settings/tokens");
+        }
+    };
+
+    const handleOpenHandTunedRepo = () => {
+        if (ipcRenderer && typeof ipcRenderer.invoke === "function") {
+            ipcRenderer.invoke("open-external", HAND_TUNED_HF_URL);
         }
     };
 
@@ -724,6 +775,25 @@ const App = () => {
                 }
             } catch (error) {
                 console.warn("[FALLBACK] HF token status check failed; starting without speaker diarization:", error);
+            }
+        }
+
+        // The tuned hand checkpoint is gated on Hugging Face. Unlike speech,
+        // where the token only unlocks the optional speaker column, the
+        // weights download cannot proceed at all without one, so the token
+        // prompt here has no continue-without option.
+        if (selectedModel === "HandObject-Tuned" &&
+                ipcRenderer && typeof ipcRenderer.invoke === "function") {
+            try {
+                const status = await ipcRenderer.invoke("get-hf-token-status");
+                if (status && status.present === false) {
+                    setHfTokenPromptToStart(true);
+                    setHfTokenRequired(true);
+                    setHfTokenModalOpen(true);
+                    return;
+                }
+            } catch (error) {
+                console.warn("[FALLBACK] HF token status check failed; the gated weights download may fail:", error);
             }
         }
 
@@ -905,15 +975,31 @@ const App = () => {
                 <div className="modal-overlay">
                     <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="hf-token-title">
                         <h3 id="hf-token-title">
-                            <span role="img" aria-label="key">🔑</span> Hugging Face token for speaker labels
+                            <span role="img" aria-label="key">🔑</span>{" "}
+                            {hfTokenRequired
+                                ? "Hugging Face token for the tuned hand model"
+                                : "Hugging Face token for speaker labels"}
                         </h3>
-                        <p>
-                            Each speech model can tag utterances and words with a
-                            speaker (SPEAKER_00, SPEAKER_01, …), but the diarization
-                            model is gated: it needs your personal Hugging Face token,
-                            and your account must have accepted the pyannote model
-                            terms.
-                        </p>
+                        {hfTokenRequired ? (
+                            <p>
+                                The tuned hand model (100DOH-TinyExplorer-Tuned) is
+                                trained on infant data and is gated on Hugging Face:
+                                downloading its weights requires your personal Hugging
+                                Face token, and your account must have been granted
+                                access to the model first.{" "}
+                                <button type="button" className="hf-token-link" onClick={handleOpenHandTunedRepo}>
+                                    Request access
+                                </button>
+                            </p>
+                        ) : (
+                            <p>
+                                Each speech model can tag utterances and words with a
+                                speaker (SPEAKER_00, SPEAKER_01, …), but the diarization
+                                model is gated: it needs your personal Hugging Face token,
+                                and your account must have accepted the pyannote model
+                                terms.
+                            </p>
+                        )}
                         <p>
                             The token is stored encrypted with your macOS Keychain and
                             never written to disk in plain text.{" "}
@@ -934,7 +1020,7 @@ const App = () => {
                             <button type="button" className="browse-btn" onClick={closeHfTokenModal}>
                                 Cancel
                             </button>
-                            {hfTokenPromptToStart && (
+                            {hfTokenPromptToStart && !hfTokenRequired && (
                                 <button type="button" className="browse-btn" onClick={handleSkipHfToken}>
                                     Continue without speakers
                                 </button>
@@ -1093,6 +1179,16 @@ const App = () => {
                                 <span role="img" aria-label="key">🔑</span> Speaker diarization token (optional)…
                             </button>
                         )}
+                        {selectedMode === "hand" && selectedModel === "HandObject-Tuned" && (
+                            <button
+                                type="button"
+                                className="hf-token-link"
+                                onClick={() => { setHfTokenRequired(true); setHfTokenModalOpen(true); }}
+                                title="Required: the tuned model weights are gated on Hugging Face and can only be downloaded with the personal access token of an account that has been granted access."
+                            >
+                                <span role="img" aria-label="key">🔑</span> Hugging Face token (required)…
+                            </button>
+                        )}
                     </div>
 
                     {selectedMode === "speech" && (
@@ -1162,7 +1258,7 @@ const App = () => {
                             />
                             <button onClick={handleSelectResultsFolder} className="browse-btn">Select Results Folder</button>
                         </div>
-                        {isVideoFile && (
+                        {isVideoFile && selectedMode !== "speech" && (
                             <div className="file-info">
                                 <small><span role="img" aria-label="movie camera">🎬</span> Video file detected - will process 1 frame per second</small>
                             </div>

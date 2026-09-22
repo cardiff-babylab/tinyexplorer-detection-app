@@ -41,7 +41,7 @@ The application combines modern web technologies with machine learning framework
 - **Backend:** Python with Flask
 - **Machine Learning:**
   - **Face Detection:** YOLO (PyTorch) and RetinaFace (TensorFlow)
-  - **Hand Detection:** 100 Days Of Hands Dataset (100DOH)
+  - **Hand Detection:** 100 Days Of Hands (100DOH)
   - **Speech Recognition:** OpenAI Whisper, Faster-Whisper, and WhisperX
 - **Cross-platform:** Windows, macOS, and Linux support
   
