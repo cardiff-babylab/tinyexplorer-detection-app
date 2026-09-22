@@ -9,6 +9,7 @@ if (process.platform === "linux" && (process.env.APPIMAGE || process.env.APPDIR)
 }
 
 import { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } from "electron"; // tslint:disable-line
+import * as os from "os";
 import * as path from "path";
 import * as fs from "fs";
 import * as https from "https";
@@ -73,7 +74,6 @@ app.disableHardwareAcceleration();
 
 // Mitigate Windows cache permission issues when running from protected folders (e.g., OneDrive)
 if (process.platform === 'win32') {
-    const os = require('os');
     const userData = path.join(os.homedir(), 'AppData', 'Roaming', 'TinyExplorer Detection App');
     app.setPath('userData', userData);
     app.setPath('cache', path.join(userData, 'Cache'));
@@ -83,6 +83,19 @@ const isDev = (process.env.NODE_ENV === "development");
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null;
 let splash: BrowserWindow | null = null;
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!hasSingleInstanceLock) {
+    app.quit();
+} else {
+    app.on("second-instance", () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+}
 
 // --- Notify-only update check ------------------------------------------------
 // Surface an info banner in the renderer when a newer *app* release exists on
@@ -212,6 +225,59 @@ ipcMain.handle("check-for-updates", async (): Promise<UpdateInfo> => {
     }
 });
 
+// App + system metadata for the renderer's "copy log for bug report" button.
+// Only static, non-identifying hardware/OS facts — no hostnames, usernames or
+// network info.
+interface DebugInfo {
+    appVersion: string;
+    platform: string;
+    arch: string;
+    osRelease: string;
+    osVersion: string; // human-readable (e.g. "15.6" on macOS, "10.0.26100" on Windows); "" if unavailable
+    cpuModel: string;
+    cpuCount: number;
+    totalMemoryGB: number;
+    electronVersion: string;
+    nodeVersion: string;
+    threadEnv: string; // set thread/OpenMP overrides inherited by the Python backend; "" if none
+}
+
+// Env vars that shape the Python backend's CPU threading (OpenMP/MKL/torch).
+// Reported in the bug-report log because a 2026-09-03 field hang was a torch
+// thread-pool stall that no report carried enough context to diagnose.
+const THREAD_ENV_VARS = [
+    "OMP_NUM_THREADS", "OMP_WAIT_POLICY", "KMP_AFFINITY", "KMP_BLOCKTIME",
+    "MKL_NUM_THREADS", "TINYEXPLORER_TORCH_THREADS", "CUDA_VISIBLE_DEVICES",
+];
+
+ipcMain.handle("get-debug-info", (): DebugInfo => {
+    let osVersion = "";
+    try {
+        osVersion = typeof (process as any).getSystemVersion === "function"
+            ? (process as any).getSystemVersion()
+            : "";
+    } catch (e) {
+        // Older Electron without getSystemVersion — os.release() still gets reported.
+    }
+    const cpus = os.cpus();
+    return {
+        appVersion: app.getVersion(),
+        platform: process.platform,
+        arch: process.arch,
+        osRelease: os.release(),
+        osVersion,
+        cpuModel: cpus.length > 0 ? cpus[0].model.trim() : "unknown",
+        cpuCount: cpus.length,
+        totalMemoryGB: Math.round(os.totalmem() / (1024 * 1024 * 1024)),
+        electronVersion: process.versions.electron || "unknown",
+        nodeVersion: process.versions.node || "unknown",
+        threadEnv: THREAD_ENV_VARS
+            .filter((key) => process.env[key] !== undefined && process.env[key] !== "")
+            .map((key) => `${key}=${process.env[key]}`)
+            .join(", "),
+    };
+});
+
 // Open an external https URL (e.g. the GitHub release page) in the default
 // browser. Restricted to https to avoid opening arbitrary schemes.
 ipcMain.handle("open-external", async (_event: any, url: string): Promise<boolean> => {
@@ -295,6 +361,7 @@ app.on('before-quit', () => {
 });
 
 app.on("ready", () => {
+    if (!hasSingleInstanceLock) return;
     logStartupTiming("app_ready");
     if (isDev) {
         const sourceMapSupport = require("source-map-support"); // tslint:disable-line

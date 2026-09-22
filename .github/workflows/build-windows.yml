@@ -37,7 +37,7 @@ jobs:
 
     - name: Install ImageMagick
       run: choco install imagemagick -y
-      
+
     - name: Generate square PNG and ICO
       shell: bash
       run: |
@@ -49,20 +49,20 @@ jobs:
             break
           fi
         done
-        
+
         if [ -z "$SOURCE_PNG" ]; then
           echo "Error: No PNG icon found"
           exit 1
         fi
-        
+
         # Create a perfectly square 256x256 PNG using ImageMagick with proper scaling
         echo "Creating square 256x256 PNG from $SOURCE_PNG"
         magick "$SOURCE_PNG" -resize 256x256 -gravity center -extent 256x256 -background transparent resources/icons/square-256.png
-        
+
         # Generate ICO from the square PNG
         echo "Generating ICO from square PNG"
         npx --yes png-to-ico resources/icons/square-256.png > resources/icon.ico
-        
+
         # Verify ICO was created
         if [ ! -f "resources/icon.ico" ]; then
           echo "Error: Failed to create icon.ico"
@@ -226,6 +226,22 @@ jobs:
         SMOKE_TEST_YOLO: '1'
         SMOKE_TEST_RETINAFACE: '1'
         PYTHONIOENCODING: 'utf-8'
+
+    - name: Verify Windows speech runtime
+      shell: pwsh
+      env:
+        PYTHONIOENCODING: 'utf-8'
+      run: |
+        $py = Join-Path $PWD "pythondist\yolo-env\python.exe"
+        & $py -c "import whisper, faster_whisper, whisperx, ctranslate2, torch; print('Speech imports OK; torch', torch.__version__)"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Push-Location python
+        try {
+          & $py -m unittest discover -s tests -p "test_transcription.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        } finally {
+          Pop-Location
+        }
 
     - name: Build React app
       shell: pwsh

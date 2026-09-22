@@ -339,6 +339,17 @@
   transition: width 0.3s ease;
 }
 
+.progress-fill.progress-indeterminate {
+  width: 35% !important;
+  animation: speech-progress-indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes speech-progress-indeterminate {
+  0% { transform: translateX(-110%); }
+  50% { transform: translateX(95%); }
+  100% { transform: translateX(285%); }
+}
+
 .progress-text {
   text-align: center;
   font-size: 14px;
@@ -402,6 +413,30 @@
   -webkit-user-select: text !important;
   -moz-user-select: text !important;
   -ms-user-select: text !important;
+}
+
+/* Pins the "copy log for bug report" button to the bottom right of the
+   progress panel. */
+.progress-panel-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.copy-log-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #495057;
+  background-color: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.copy-log-btn:hover {
+  background-color: #f1f3f5;
+  border-color: #c6ccd2;
 }
 
 .empty-state {

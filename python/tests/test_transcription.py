@@ -2,6 +2,7 @@ import csv
 import os
 import sys
 import tempfile
+import time
 import types
 import unittest
 from pathlib import Path
@@ -609,6 +610,45 @@ class ProgressAndStopTests(unittest.TestCase):
         self.assertTrue(events)
         self.assertEqual(events[-1]["progress_percent"], 100.0)
 
+    def test_openai_progress_hook_patches_transcribe_module(self):
+        whisper_pkg = types.ModuleType("whisper")
+        whisper_pkg.__path__ = []
+        # The package deliberately exports a function with the same name as
+        # the submodule, matching openai-whisper's public API.
+        whisper_pkg.transcribe = lambda *args, **kwargs: None
+        transcribe_module = types.ModuleType("whisper.transcribe")
+        original_tqdm = object()
+        transcribe_module.tqdm = original_tqdm
+        events = []
+        processor = TranscriptionProcessor(completion_callback=events.append)
+
+        with mock.patch.dict(sys.modules, {
+                "whisper": whisper_pkg,
+                "whisper.transcribe": transcribe_module,
+        }):
+            with processor._whisper_progress():
+                # Mirror openai-whisper's real call: tqdm.tqdm(total=...,
+                # unit="frames", disable=verbose is not False). The stand-in
+                # bar must tolerate those kwargs and report updates even
+                # though the real bar would be disabled.
+                bar = transcribe_module.tqdm.tqdm(total=100, unit="frames", disable=True)
+                bar.update(50)
+            self.assertIs(transcribe_module.tqdm, original_tqdm)
+
+        progress = [e for e in events if e.get("status") == "audio_completed"]
+        self.assertEqual(progress[-1]["progress_percent"], 50.0)
+
+    def test_speech_process_announces_processing_started(self):
+        events = []
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "sample.wav"
+            source.write_bytes(b"fake")
+            processor = FakeTranscriptionProcessor(completion_callback=events.append)
+            processor.process(str(source), "Faster Whisper", tmp)
+
+        started = [e for e in events if e.get("status") == "processing_started"]
+        self.assertEqual(started, [{"status": "processing_started", "total_audio": 1}])
+
     def test_pending_stop_interrupts_mid_file(self):
         processor = TranscriptionProcessor()
         processor.stop_processing()
@@ -638,6 +678,275 @@ class ProgressAndStopTests(unittest.TestCase):
             merged = (result_dir / "detections.csv").read_text()
             self.assertIn("a.wav", merged)
             self.assertNotIn("b.wav", merged)
+
+
+class WorkHeartbeatTests(unittest.TestCase):
+    """2026-09-02 field report: with 'Whisper (OpenAI)' + tiny, the progress
+    panel went silent after 'Running speech recognition...' and the job never
+    visibly completed. Recognition, audio decode and diarization emit no text
+    between start and finish, so a slow run and a wedged run look identical.
+    These tests pin the work heartbeat that closes that gap: alive-and-moving
+    runs keep reporting percent, silent phases are named, and a genuinely
+    stuck recognition loop escalates to an explicit may-be-stuck warning."""
+
+    def _run_with_slow_backend(self, work, interval=0.02):
+        """Run the OpenAI path with model.transcribe replaced by
+        `work(processor)`; return the emitted progress messages."""
+        mod = types.ModuleType("whisper")
+        holder = {}
+
+        class _Model:
+            def transcribe(self, audio, word_timestamps=False, fp16=True, **decode_options):
+                work(holder["processor"])
+                return {"segments": [{"start": 0.0, "end": 1.0, "text": "hi", "words": []}],
+                        "language": "en"}
+
+        mod.load_model = lambda name: _Model()
+        messages = []
+        processor = TranscriptionProcessor(progress_callback=messages.append)
+        holder["processor"] = processor
+        with mock.patch.dict(sys.modules, {"whisper": mod}), \
+                mock.patch.object(TranscriptionProcessor, "WORK_HEARTBEAT_SECONDS", interval), \
+                mock.patch.object(TranscriptionProcessor, "_load_audio",
+                                  staticmethod(lambda path: [0.0] * 16000)):
+            processor._transcribe("sample.wav", "Whisper (OpenAI)")
+        return messages
+
+    def test_recognition_emits_heartbeat_while_backend_is_silent(self):
+        messages = self._run_with_slow_backend(lambda p: time.sleep(0.15))
+        beats = [m for m in messages if m.startswith("⏳ Still running speech recognition")]
+        self.assertTrue(beats)
+
+    def test_heartbeat_reports_percent_when_progress_moves(self):
+        def work(processor):
+            time.sleep(0.06)
+            processor._emit_file_progress(0.5)
+            time.sleep(0.06)
+
+        messages = self._run_with_slow_backend(work)
+        self.assertTrue(any("50% of this file" in m for m in messages))
+
+    def test_heartbeat_escalates_to_stuck_warning_without_progress(self):
+        # No fraction movement for many beats -> the heartbeat must say so
+        # explicitly, making a real hang distinguishable from slow progress.
+        messages = self._run_with_slow_backend(lambda p: time.sleep(0.3))
+        self.assertTrue(any("may be stuck" in m for m in messages))
+
+    def test_moving_recognition_never_reports_stuck(self):
+        def work(processor):
+            for step in range(1, 7):
+                time.sleep(0.03)
+                processor._emit_file_progress(step / 7)
+
+        messages = self._run_with_slow_backend(work)
+        self.assertFalse(any("may be stuck" in m for m in messages))
+
+    def test_openai_path_announces_audio_decode(self):
+        # PyAV-decoding a long recording is the first silent stretch after
+        # 'Running speech recognition...'; it must be announced.
+        messages = self._run_with_slow_backend(lambda p: None)
+        decode = [i for i, m in enumerate(messages) if m.startswith("🔉 Decoding audio track")]
+        recognition = [i for i, m in enumerate(messages)
+                       if m.startswith("🎤 Running speech recognition")]
+        self.assertTrue(decode)
+        self.assertTrue(recognition)
+        self.assertLess(recognition[0], decode[0])
+
+    def test_diarization_heartbeat_names_phase_without_stall_warning(self):
+        # pyannote gives no progress hook, so minutes of silence are normal
+        # here: the heartbeat must name the phase but never cry stuck.
+        mod, diarize_mod = _fake_whisperx_with_diarization()
+        original_call = diarize_mod.DiarizationPipeline.__call__
+
+        def slow_call(self_, audio, **kwargs):
+            time.sleep(0.15)
+            return original_call(self_, audio, **kwargs)
+
+        diarize_mod.DiarizationPipeline.__call__ = slow_call
+        messages = []
+        processor = TranscriptionProcessor(progress_callback=messages.append)
+        with mock.patch.dict(sys.modules, {"faster_whisper": _fake_faster_whisper_module(),
+                                           "whisperx": mod, "whisperx.diarize": diarize_mod}), \
+                mock.patch.dict(os.environ, {"TINYEXPLORER_HF_TOKEN": "hf_test"}), \
+                mock.patch.object(TranscriptionProcessor, "WORK_HEARTBEAT_SECONDS", 0.02), \
+                mock.patch.object(TranscriptionProcessor, "_load_audio",
+                                  staticmethod(lambda path: [0.0] * 16000)):
+            processor._transcribe("sample.wav", "Faster Whisper")
+        self.assertTrue(any(m.startswith("⏳ Still identifying speakers") for m in messages))
+        self.assertFalse(any("may be stuck" in m for m in messages))
+
+
+class LoadStallDiagnosisTests(unittest.TestCase):
+    """2026-09-02 lab report: WhisperX sat in 'Loading WhisperX model and
+    voice-activity pipeline' for 40+ minutes while the heartbeat kept
+    promising 'the app is not stuck'. On managed lab networks the weight
+    fetches (huggingface.co / github.com) can hang at the socket level with
+    no timeout. Loading must (a) stop reassuring once nothing has moved for
+    a while and point at the network instead, and (b) run under a default
+    socket timeout so those hangs become errors rather than lasting forever."""
+
+    def _load(self, impl):
+        messages = []
+        processor = TranscriptionProcessor(progress_callback=messages.append)
+        with mock.patch.multiple(TranscriptionProcessor,
+                                 LOAD_HEARTBEAT_SECONDS=0.02, LOAD_STALL_SECONDS=0.08), \
+                mock.patch.object(TranscriptionProcessor, "_load_model_impl", impl):
+            processor._load_model("WhisperX", "tiny")
+        return messages
+
+    def test_loading_heartbeat_escalates_when_nothing_moves(self):
+        messages = self._load(lambda self_, variant, name: time.sleep(0.3))
+        escalated = [m for m in messages if "firewall or proxy" in m]
+        self.assertTrue(escalated)
+        # The escalated line must stop promising that the app is not stuck.
+        self.assertFalse(any("not stuck" in m for m in escalated))
+
+    def test_loading_heartbeat_stays_calm_while_downloads_move(self):
+        def impl(self_, variant, name):
+            state = {}
+            for step in range(1, 11):
+                time.sleep(0.025)
+                self_._emit_download_progress("model.bin", step * 1048576, 10 * 1048576, state)
+
+        messages = self._load(impl)
+        self.assertFalse(any("firewall or proxy" in m for m in messages))
+        self.assertTrue(any("not stuck" in m for m in messages))
+
+    def test_load_runs_under_default_socket_timeout_and_restores(self):
+        import socket
+        observed = {}
+
+        def impl(self_, variant, name):
+            observed["timeout"] = socket.getdefaulttimeout()
+
+        previous = socket.getdefaulttimeout()
+        self._load(impl)
+        self.assertEqual(observed["timeout"], 60.0)
+        self.assertEqual(socket.getdefaulttimeout(), previous)
+
+        with mock.patch.dict(os.environ, {"TINYEXPLORER_NETWORK_TIMEOUT": "5"}):
+            self._load(impl)
+        self.assertEqual(observed["timeout"], 5.0)
+        self.assertEqual(socket.getdefaulttimeout(), previous)
+
+
+class RuntimeInfoTests(unittest.TestCase):
+    """2026-09-03 field hang: torch CPU inference stalled on a hybrid
+    P/E-core machine, but the copy-log bug report carried no thread counts
+    or OMP settings, so diagnosis needed another round-trip. Each backend
+    load must put a runtime line into the progress log."""
+
+    def _load(self, variant, modules, env=None):
+        messages = []
+        processor = TranscriptionProcessor(progress_callback=messages.append)
+        with mock.patch.dict(sys.modules, modules), \
+                mock.patch.dict(os.environ, env or {}):
+            processor._load_model(variant, "tiny")
+        return [m for m in messages if m.startswith("🧵 Speech runtime:")]
+
+    def test_torch_backends_report_version_threads_and_env(self):
+        fake_torch = types.SimpleNamespace(__version__="2.8.0+test",
+                                           get_num_threads=lambda: 7)
+        lines = self._load("Whisper (OpenAI)",
+                           {"whisper": _fake_whisper_module(), "torch": fake_torch},
+                           env={"OMP_NUM_THREADS": "3"})
+        self.assertEqual(len(lines), 1)
+        self.assertIn("torch 2.8.0+test", lines[0])
+        self.assertIn("7 torch CPU threads", lines[0])
+        self.assertIn("OMP_NUM_THREADS=3", lines[0])
+
+    def test_faster_whisper_reports_ctranslate2(self):
+        fake_ct2 = types.SimpleNamespace(__version__="4.8.2-test")
+        lines = self._load("Faster Whisper",
+                           {"faster_whisper": _fake_faster_whisper_module(),
+                            "ctranslate2": fake_ct2})
+        self.assertEqual(len(lines), 1)
+        self.assertIn("ctranslate2 4.8.2-test", lines[0])
+
+    def test_unimported_library_still_reports_python_and_env(self):
+        # torch not loaded: the line must degrade rather than import it —
+        # a fresh torch import inside mock.patch.dict(sys.modules) evicted
+        # numpy on exit and poisoned the whole CI test run with a reload.
+        with mock.patch.dict(sys.modules, {"torch": None}):
+            lines = self._load("WhisperX", {"whisperx": _fake_whisperx_module()})
+        self.assertEqual(len(lines), 1)
+        self.assertIn("Python ", lines[0])
+        self.assertIn("thread env:", lines[0])
+
+
+def _scipy_available():
+    import importlib.util
+    return importlib.util.find_spec("scipy") is not None
+
+
+@unittest.skipUnless(os.name == "nt", "stdin pipe/DLL-load deadlock is Windows-specific")
+@unittest.skipUnless(_scipy_available(), "needs scipy's native extensions")
+class WindowsStdinDeadlockTests(unittest.TestCase):
+    """Regression tests for the 2026-09-04 stdin/scipy loader deadlock.
+
+    A thread blocked in a synchronous read on the stdin PIPE keeps the
+    handle busy; loading scipy's Fortran extensions then deadlocks behind
+    it while the loader lock is held. subprocess_api reads commands from
+    exactly such a pipe while transcription worker threads import scipy
+    lazily (whisper word timestamps -> numba -> scipy.linalg; whisperx ->
+    pyannote -> scipy.signal). Children are spawned with stdin held open
+    to recreate the Electron parent, and killed on timeout so a deadlock
+    can never wedge the test runner.
+    """
+
+    def _run_child(self, body, timeout):
+        import subprocess
+        proc = subprocess.Popen(
+            [sys.executable, "-c", body],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        try:
+            deadline = time.monotonic() + timeout
+            while time.monotonic() < deadline and proc.poll() is None:
+                time.sleep(0.2)
+            finished = proc.poll() is not None
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+            out = proc.communicate()[0]
+        return finished, out.decode("utf-8", "replace")
+
+    def test_blocking_stdin_read_deadlocks_scipy_import(self):
+        # The OLD reader shape must deadlock: this proves the harness can
+        # see the bug (and will flag a scipy/CPython change that removes
+        # it, at which point the polling reader could be retired).
+        finished, out = self._run_child(
+            "import sys, threading\n"
+            "threading.Thread(target=sys.stdin.readline, daemon=True).start()\n"
+            "import time; time.sleep(0.5)\n"
+            "import scipy.signal\n"
+            "print('imported', flush=True)\n",
+            timeout=15,
+        )
+        self.assertFalse(
+            finished,
+            "blocking stdin read no longer deadlocks scipy import (%s); the "
+            "polling reader in subprocess_api may be removable" % out.strip())
+
+    def test_polling_stdin_reader_survives_scipy_import(self):
+        finished, out = self._run_child(
+            "import sys, threading, time\n"
+            "sys.path.insert(0, '.')\n"
+            "from subprocess_api import _stdin_lines\n"
+            "def consume():\n"
+            "    for _ in _stdin_lines():\n"
+            "        pass\n"
+            "threading.Thread(target=consume, daemon=True).start()\n"
+            "time.sleep(0.5)\n"
+            "import scipy.signal\n"
+            "import scipy.linalg\n"
+            "print('imported', flush=True)\n",
+            timeout=60,
+        )
+        self.assertTrue(finished, "polling stdin reader still deadlocks scipy import: %s" % out.strip())
+        self.assertIn("imported", out)
 
 
 if __name__ == "__main__":

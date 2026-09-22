@@ -310,8 +310,15 @@ const App = () => {
                         
                         // Check if this is a download progress update (contains "Downloading" and percentage)
                         const isDownloadProgress = message.includes('⏳ Downloading') && message.includes('%');
-                        
+                        // Heartbeat lines ("⏳ Still …") repeat every ~20-30 s through
+                        // model loading and recognition; coalesce consecutive ones into
+                        // a single live-updating row like download progress.
+                        const isHeartbeat = message.startsWith('⏳ Still ');
+
                         setProgressMessages(prev => {
+                            if (isHeartbeat && prev.length > 0 && prev[prev.length - 1].startsWith('⏳ Still ')) {
+                                return [...prev.slice(0, -1), message];
+                            }
                             if (isDownloadProgress && prev.length > 0) {
                                 // Check if the last message was also a download progress for the same model
                                 const lastMessage = prev[prev.length - 1];
@@ -866,6 +873,76 @@ const App = () => {
         }
     };
 
+    // Transient feedback for the "copy log" button; reset after a short delay.
+    const [copyLogStatus, setCopyLogStatus] = useState<"" | "copied" | "failed">("");
+    const copyLogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => {
+        if (copyLogTimerRef.current) clearTimeout(copyLogTimerRef.current);
+    }, []);
+
+    // Copy the progress log plus system + run metadata as GitHub-issue-ready
+    // markdown, so users can paste one complete blob into a bug report.
+    const handleCopyDebugLog = async () => {
+        console.log("User clicked 'Copy log for bug report' button");
+        const lines: string[] = [];
+        lines.push("### TinyExplorer Detection App — debug report");
+        lines.push("");
+        lines.push("**System**");
+        lines.push(`- Generated: ${new Date().toISOString()}`);
+        try {
+            if (ipcRenderer && typeof ipcRenderer.invoke === "function") {
+                const info = await ipcRenderer.invoke("get-debug-info");
+                lines.push(`- App version: ${info.appVersion}`);
+                lines.push(`- OS: ${info.platform} ${info.osVersion || info.osRelease} (${info.arch}, kernel ${info.osRelease})`);
+                lines.push(`- CPU: ${info.cpuModel} (${info.cpuCount} cores)`);
+                lines.push(`- Memory: ${info.totalMemoryGB} GB`);
+                lines.push(`- Electron ${info.electronVersion} / Node ${info.nodeVersion}`);
+                lines.push(`- Thread env: ${info.threadEnv || "(defaults)"}`);
+            } else {
+                lines.push(`- User agent: ${navigator.userAgent}`);
+            }
+        } catch (error) {
+            console.warn("[FALLBACK] get-debug-info failed; copying log without system metadata:", error);
+            lines.push(`- User agent: ${navigator.userAgent}`);
+        }
+        lines.push("");
+        lines.push("**Run settings**");
+        lines.push(`- Mode: ${selectedMode}`);
+        lines.push(`- Model: ${selectedModel || "none selected"}`);
+        if (selectedMode === "speech") {
+            lines.push(`- Model size: ${whisperSize}`);
+        } else {
+            lines.push(`- Confidence threshold: ${confidenceThreshold.toFixed(2)}`);
+        }
+        lines.push(`- Input: ${selectedFolder || "none selected"}`);
+        lines.push(`- Results folder: ${resultsFolder || "none selected"}`);
+        const runState = isProcessing ? "processing" : isStarting ? "starting" : "idle/finished";
+        lines.push(`- Progress: ${progress.toFixed(1)}% (${runState})`);
+        lines.push("");
+        lines.push("**Progress log**");
+        lines.push("```");
+        lines.push(...(progressMessages.length > 0 ? progressMessages : ["(no messages)"]));
+        lines.push("```");
+
+        const report = lines.join("\n");
+        let copied = false;
+        try {
+            if ((window as any).isInElectronRenderer) {
+                // Electron's clipboard module works regardless of the page's
+                // secure-context status, unlike navigator.clipboard on file://.
+                (window as any).nodeRequire("electron").clipboard.writeText(report);
+            } else {
+                await navigator.clipboard.writeText(report);
+            }
+            copied = true;
+        } catch (error) {
+            console.error("Copying debug log to clipboard failed:", error);
+        }
+        setCopyLogStatus(copied ? "copied" : "failed");
+        if (copyLogTimerRef.current) clearTimeout(copyLogTimerRef.current);
+        copyLogTimerRef.current = setTimeout(() => setCopyLogStatus(""), 2500);
+    };
+
 
     if (!pythonReady) {
         return (
@@ -1218,11 +1295,17 @@ const App = () => {
                         <div className="progress-section">
                             <div className="progress-bar">
                                 <div 
-                                    className="progress-fill" 
+                                    className={`progress-fill ${
+                                        selectedMode === "speech" && progress === 0 ? "progress-indeterminate" : ""
+                                    }`}
                                     style={{ width: `${Math.min(progress, 100)}%` }}
                                 />
                             </div>
-                            <div className="progress-text">{progress.toFixed(1)}%</div>
+                            <div className="progress-text">
+                                {selectedMode === "speech" && progress === 0
+                                    ? "Preparing speech model and audio…"
+                                    : `${progress.toFixed(1)}%`}
+                            </div>
                         </div>
                     )}
 
@@ -1240,7 +1323,7 @@ const App = () => {
                                 </div>
                                 {completedResultsFolder && !isProcessing && !isStarting && (
                                     <div className="control-section" style={{ marginTop: '10px' }}>
-                                        <button 
+                                        <button
                                             onClick={handleOpenResultsFolder}
                                             className="browse-btn"
                                         >
@@ -1248,6 +1331,22 @@ const App = () => {
                                         </button>
                                     </div>
                                 )}
+                                <div className="progress-panel-footer">
+                                    <button
+                                        type="button"
+                                        className="copy-log-btn"
+                                        onClick={handleCopyDebugLog}
+                                        title="Copy the progress log plus system info (OS, CPU, app version) to paste into a GitHub bug report"
+                                    >
+                                        {copyLogStatus === "copied" ? (
+                                            <><span role="img" aria-label="check mark">✅</span> Copied</>
+                                        ) : copyLogStatus === "failed" ? (
+                                            <><span role="img" aria-label="warning">⚠️</span> Copy failed</>
+                                        ) : (
+                                            <><span role="img" aria-label="clipboard">📋</span> Copy log for bug report</>
+                                        )}
+                                    </button>
+                                </div>
                             </div>
                         )}
 

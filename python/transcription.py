@@ -8,8 +8,11 @@ not installed.
 from __future__ import annotations
 
 import csv
+import importlib
 import os
+import sys
 import threading
+import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -25,6 +28,15 @@ class ProcessingStopped(Exception):
 
 
 class TranscriptionProcessor:
+    # Interval between "still working" status lines while a file is being
+    # transcribed. Class-level so tests can shrink it.
+    WORK_HEARTBEAT_SECONDS = 30.0
+    # Interval between "still loading" lines during model load, and how long
+    # without any download/phase activity before the loading heartbeat stops
+    # reassuring and points at the network instead.
+    LOAD_HEARTBEAT_SECONDS = 20.0
+    LOAD_STALL_SECONDS = 120.0
+
     def __init__(self, progress_callback: Optional[Callable[[str], None]] = None,
                  completion_callback: Optional[Callable[[Dict[str, Any]], None]] = None):
         self.progress_callback = progress_callback
@@ -43,10 +55,28 @@ class TranscriptionProcessor:
         self._file_index = 0
         self._file_total = 1
         self._last_percent = -1.0
+        self._loading_phase = "starting speech runtime"
+        self._loading_started = 0.0
+        # Last time the load visibly moved (phase change or download bytes);
+        # read by the loading heartbeat's stall escalation.
+        self._load_activity_at = 0.0
+        # Per-file work phase for the heartbeat: recognition loops report a
+        # fraction (and get stall detection); decode/alignment/diarization
+        # phases have no fraction and get plain elapsed-time lines.
+        self._work_phase = "running speech recognition"
+        self._work_tracks_fraction = True
+        self._current_fraction = 0.0
 
     def _emit(self, message: str) -> None:
         if self.progress_callback:
             self.progress_callback(message)
+
+    def _set_loading_phase(self, phase: str) -> None:
+        """Record and display the precise model-loading stage."""
+        self._loading_phase = phase
+        self._load_activity_at = time.monotonic()
+        elapsed = time.monotonic() - self._loading_started if self._loading_started else 0.0
+        self._emit("⏳ %s (%.1f s elapsed)..." % (phase, elapsed))
 
     def _check_stop(self) -> None:
         if self._stop.is_set():
@@ -58,9 +88,10 @@ class TranscriptionProcessor:
         The renderer already maps 'audio_completed' progress_percent onto the
         bar, so intra-file updates reuse that event with a fractional
         position. Throttled to whole-percent steps to keep stdout light."""
+        fraction = min(max(fraction, 0.0), 1.0)
+        self._current_fraction = fraction  # read by the work heartbeat
         if not self.completion_callback or not self._file_total:
             return
-        fraction = min(max(fraction, 0.0), 1.0)
         percent = (self._file_index + fraction) / self._file_total * 100
         if percent - self._last_percent >= 1.0:
             self._last_percent = percent
@@ -88,6 +119,7 @@ class TranscriptionProcessor:
         live-updating row, so this reads as a progress bar in the UI. When the
         size is unknown, fall back to a line every 25 MB so long downloads
         still visibly move."""
+        self._load_activity_at = time.monotonic()  # bytes are flowing
         if total:
             pct = int(downloaded * 100 / total)
             if pct != state.get("last"):
@@ -237,7 +269,10 @@ class TranscriptionProcessor:
         @contextmanager
         def _cm():
             try:
-                import whisper.transcribe as wt
+                # ``whisper.__init__`` exports a function named ``transcribe``.
+                # A dotted import can therefore bind that function instead of
+                # the module whose global tqdm object we need to replace.
+                wt = importlib.import_module("whisper.transcribe")
                 original = wt.tqdm
             except Exception:
                 yield
@@ -273,6 +308,132 @@ class TranscriptionProcessor:
 
         return _cm()
 
+    def _network_timeout(self):
+        """Context manager: apply a default socket timeout while model
+        weights may be fetched. whisperx's and whisper's weight fetches pass
+        no timeout at all, so on a firewalled/proxied lab network a dropped
+        connection hangs the load forever (2026-09-02 WhisperX 40-minute
+        report); with a default timeout it becomes a clear error instead.
+        Slow-but-flowing downloads are unaffected — the timeout applies per
+        socket operation, not to the whole transfer."""
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _cm():
+            import socket
+            try:
+                seconds = float(os.environ.get("TINYEXPLORER_NETWORK_TIMEOUT", "60"))
+            except ValueError:
+                seconds = 60.0
+            previous = socket.getdefaulttimeout()
+            if seconds > 0:
+                socket.setdefaulttimeout(seconds)
+            try:
+                yield
+            finally:
+                socket.setdefaulttimeout(previous)
+
+        return _cm()
+
+    def _set_work_phase(self, phase: str, tracks_fraction: bool) -> None:
+        """Label the current per-file stage for the work heartbeat."""
+        self._work_phase = phase
+        self._work_tracks_fraction = tracks_fraction
+
+    def _work_heartbeat(self):
+        """Context manager: emit a status line every WORK_HEARTBEAT_SECONDS
+        while a file is worked on, covering the phases that otherwise print
+        nothing between 'Running speech recognition...' and the results
+        (recognition compute, audio decode, alignment, diarization — the
+        2026-09-02 'tiny model stalled' report). Recognition phases report
+        percent done; four consecutive beats without movement add an explicit
+        may-be-stuck warning so a real hang is distinguishable from slow
+        progress. The renderer coalesces consecutive '⏳ Still' lines into a
+        single live-updating row."""
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _cm():
+            stop = threading.Event()
+            started = time.monotonic()
+            processor = self
+
+            def _beat() -> None:
+                last_fraction = processor._current_fraction
+                stalled_beats = 0
+                while not stop.wait(processor.WORK_HEARTBEAT_SECONDS):
+                    elapsed_min = (time.monotonic() - started) / 60.0
+                    phase = processor._work_phase
+                    if not processor._work_tracks_fraction:
+                        stalled_beats = 0
+                        last_fraction = processor._current_fraction
+                        processor._emit("⏳ Still %s (%.1f min elapsed)..." % (phase, elapsed_min))
+                        continue
+                    fraction = processor._current_fraction
+                    if fraction > last_fraction:
+                        last_fraction = fraction
+                        stalled_beats = 0
+                        processor._emit("⏳ Still %s — %d%% of this file done (%.1f min elapsed)..."
+                                        % (phase, int(fraction * 100), elapsed_min))
+                    else:
+                        stalled_beats += 1
+                        warning = ("" if stalled_beats < 4 else
+                                   " If this keeps repeating, the job may be stuck — "
+                                   "press Stop and use 'Copy log for bug report'.")
+                        processor._emit("⏳ Still %s — %d%% of this file done, no change for "
+                                        "%.0f s (%.1f min elapsed)...%s"
+                                        % (phase, int(fraction * 100),
+                                           stalled_beats * processor.WORK_HEARTBEAT_SECONDS,
+                                           elapsed_min, warning))
+
+            threading.Thread(target=_beat, daemon=True).start()
+            try:
+                yield
+            finally:
+                stop.set()
+
+        return _cm()
+
+    def _decode_audio(self, path: str) -> Any:
+        """_load_audio plus heartbeat phase bookkeeping: PyAV-decoding a long
+        recording in one go is otherwise a silent stretch users read as a
+        hang."""
+        previous = (self._work_phase, self._work_tracks_fraction)
+        self._set_work_phase("decoding the audio track", False)
+        self._emit("🔉 Decoding audio track...")
+        try:
+            return self._load_audio(path)
+        finally:
+            self._set_work_phase(*previous)
+
+    def _emit_runtime_info(self, variant: str) -> None:
+        """One-line library/threading summary for the progress log, and thus
+        for the copy-log bug report. The 2026-09-03 field hang came down to
+        torch CPU inference stalling on a hybrid P/E-core machine, and no
+        report carried the thread count or OMP settings needed to see that.
+        Reads only libraries the backend import already loaded (whisper and
+        whisperx pull in torch, faster_whisper pulls in ctranslate2) — a
+        diagnostics line must never trigger a heavy import of its own."""
+        import platform
+        parts = ["Python %s" % platform.python_version()]
+        try:
+            if variant == "Faster Whisper":
+                ct2 = sys.modules.get("ctranslate2")
+                if ct2 is not None:
+                    parts.append("ctranslate2 %s" % getattr(ct2, "__version__", "unknown"))
+            else:
+                torch = sys.modules.get("torch")
+                if torch is not None:
+                    parts.append("torch %s" % getattr(torch, "__version__", "unknown"))
+                    parts.append("%d torch CPU threads" % torch.get_num_threads())
+        except Exception:
+            pass
+        overrides = ["%s=%s" % (key, os.environ[key]) for key in sorted(os.environ)
+                     if key.startswith(("OMP_", "KMP_", "MKL_"))
+                     or key == "TINYEXPLORER_TORCH_THREADS"]
+        parts.append("thread env: " + (", ".join(overrides) if overrides else "defaults"))
+        self._emit("🧵 Speech runtime: %s" % "; ".join(parts))
+
     @staticmethod
     def _device() -> str:
         return "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES", "") not in ("", "-1") else "cpu"
@@ -286,24 +447,44 @@ class TranscriptionProcessor:
         # keeps old callers working.
         model_name = size or os.environ.get("TINYEXPLORER_WHISPER_MODEL", "base")
         self._emit("🎤 Loading transcription model '%s' (first use may download model weights)..." % model_name)
+        self._loading_started = time.monotonic()
+        self._loading_phase = "starting speech runtime"
+        self._load_activity_at = time.monotonic()
         # Importing the speech libraries alone takes ~45 s even on a fast
         # machine (torch + pyannote + lightning for WhisperX), and antivirus
         # cold-scans can stretch that to minutes of silence that users read
-        # as a hang. Heartbeat until the load returns.
+        # as a hang. Heartbeat until the load returns — but once nothing has
+        # visibly moved for LOAD_STALL_SECONDS, stop reassuring and point at
+        # the likely cause (2026-09-02 lab report: WhisperX sat in the load
+        # phase for 40+ minutes on a filtered network while we kept printing
+        # "the app is not stuck").
         heartbeat_stop = threading.Event()
 
         def _heartbeat() -> None:
-            waited = 0
-            while not heartbeat_stop.wait(20):
-                waited += 20
-                self._emit("⏳ Still loading %s (%d s) — first load is slow while the speech "
-                           "libraries are read and scanned; the app is not stuck..." % (variant, waited))
+            waited = 0.0
+            while not heartbeat_stop.wait(self.LOAD_HEARTBEAT_SECONDS):
+                waited += self.LOAD_HEARTBEAT_SECONDS
+                quiet_for = time.monotonic() - self._load_activity_at
+                if quiet_for >= self.LOAD_STALL_SECONDS:
+                    self._emit("⏳ Still loading %s (%.0f s; %s) — no download or loading "
+                               "activity for %.0f s. A firewall or proxy may be blocking "
+                               "model downloads (huggingface.co / github.com). If this keeps "
+                               "repeating, press Stop, check the network, and use "
+                               "'Copy log for bug report'."
+                               % (variant, waited, self._loading_phase, quiet_for))
+                else:
+                    self._emit("⏳ Still loading %s (%.0f s; %s) — first load is slow while the speech "
+                               "libraries are read and scanned; the app is not stuck..."
+                               % (variant, waited, self._loading_phase))
 
         threading.Thread(target=_heartbeat, daemon=True).start()
         try:
-            self._load_model_impl(variant, model_name)
+            with self._network_timeout():
+                self._load_model_impl(variant, model_name)
         finally:
             heartbeat_stop.set()
+        elapsed = time.monotonic() - self._loading_started
+        self._emit("✅ %s model ready (%.1f s)." % (variant, elapsed))
         if not self._hf_token():
             self._emit("ℹ️ Set a Hugging Face token (🔑 in the app, or TINYEXPLORER_HF_TOKEN) to "
                        "enable speaker diarization; exporting without speaker labels.")
@@ -312,18 +493,28 @@ class TranscriptionProcessor:
 
     def _load_model_impl(self, variant: str, model_name: str) -> None:
         if variant == "Whisper (OpenAI)":
+            self._set_loading_phase("Importing OpenAI Whisper")
             import whisper
+            self._emit_runtime_info(variant)
+            self._set_loading_phase("Checking OpenAI Whisper model weights")
             self._ensure_openai_whisper_weights(model_name)
+            self._set_loading_phase("Loading OpenAI Whisper checkpoint into memory")
             self._model = whisper.load_model(model_name)
         elif variant == "Faster Whisper":
+            self._set_loading_phase("Importing Faster Whisper")
             from faster_whisper import WhisperModel
+            self._emit_runtime_info(variant)
             device = self._device()
             compute = "float16" if device == "cuda" else "int8"
+            self._set_loading_phase("Loading Faster Whisper model")
             with self._hf_download_progress("Faster Whisper %s" % model_name):
                 self._model = WhisperModel(model_name, device=device, compute_type=compute)
         elif variant == "WhisperX":
+            self._set_loading_phase("Importing WhisperX and speech libraries")
             import whisperx
+            self._emit_runtime_info(variant)
             device = self._device()
+            self._set_loading_phase("Loading WhisperX model and voice-activity pipeline")
             with self._hf_download_progress("WhisperX %s" % model_name):
                 self._model = whisperx.load_model(model_name, device=device,
                                                   compute_type="float16" if device == "cuda" else "int8")
@@ -359,7 +550,14 @@ class TranscriptionProcessor:
     def _transcribe(self, path: str, variant: str, size: Optional[str] = None) -> Tuple[List[Dict[str, Any]], str]:
         if self._model_variant != variant or self._model_size != size or self._model is None:
             self._load_model(variant, size)
+        self._check_stop()
         self._emit("🎤 Running speech recognition (may take a while for long recordings)...")
+        self._current_fraction = 0.0
+        self._set_work_phase("running speech recognition", True)
+        with self._work_heartbeat():
+            return self._transcribe_impl(path, variant)
+
+    def _transcribe_impl(self, path: str, variant: str) -> Tuple[List[Dict[str, Any]], str]:
         if variant == "Faster Whisper":
             # transcribe() returns a lazy generator: consuming it segment by
             # segment lets the UI bar track s.end/duration and lets a stop
@@ -374,7 +572,7 @@ class TranscriptionProcessor:
                 if duration:
                     self._emit_file_progress(float(s.end or 0) / duration)
             if self._hf_token():  # skip the audio decode when diarization is off
-                segments = self._assign_speakers(segments, self._load_audio(path))
+                segments = self._assign_speakers(segments, self._decode_audio(path))
             return segments, getattr(info, "language", "unknown")
         if variant == "WhisperX":
             # whisperx.load_model() returns a FasterWhisperPipeline whose
@@ -382,7 +580,7 @@ class TranscriptionProcessor:
             # accept a percent progress_callback (3.8+). Word-level times come
             # from the separate align() stage, speaker labels from the
             # diarization stage — both are best-effort extras.
-            audio = self._load_audio(path)
+            audio = self._decode_audio(path)
 
             def _wx_progress(percent: Any) -> None:
                 self._check_stop()
@@ -396,7 +594,7 @@ class TranscriptionProcessor:
             return [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"),
                                        s.get("speaker"))
                     for s in segments], language
-        audio = self._load_audio(path)
+        audio = self._decode_audio(path)
         with self._whisper_progress():
             result = self._model.transcribe(audio, word_timestamps=True, fp16=False)
         segments = [self._segment_dict(s.get("start"), s.get("end"), s.get("text", ""), s.get("words"),
@@ -419,6 +617,7 @@ class TranscriptionProcessor:
                     model_a, metadata = whisperx.load_align_model(language_code=language, device=device)
                 self._align_cache = (language, model_a, metadata)
             _, model_a, metadata = self._align_cache
+            self._set_work_phase("aligning word-level timestamps", False)
             self._emit("📐 Aligning word-level timestamps...")
             segments = whisperx.align(segments, model_a, metadata, audio, device).get("segments", segments)
         except Exception as exc:
@@ -437,6 +636,9 @@ class TranscriptionProcessor:
         if not self._hf_token() or not segments or self._stop.is_set():
             return segments
         device = self._device()
+        # pyannote exposes no progress hook, so minutes of silence are normal
+        # here: name the phase so the heartbeat never calls it stuck.
+        self._set_work_phase("preparing speaker diarization", False)
         try:
             import inspect
             from whisperx.diarize import DiarizationPipeline, assign_word_speakers
@@ -454,20 +656,22 @@ class TranscriptionProcessor:
                     candidates.insert(0, override)
                 self._emit("🗣️ Loading speaker diarization model (first use downloads weights)...")
                 last_error: Optional[Exception] = None
-                for model_name in candidates:
-                    kwargs: Dict[str, Any] = {token_kwarg: self._hf_token(), "device": device}
-                    if model_name:
-                        kwargs["model_name"] = model_name
-                    try:
-                        with self._hf_download_progress("speaker diarization model"):
-                            self._diarizer = DiarizationPipeline(**kwargs)
-                        break
-                    except Exception as exc:
-                        last_error = exc
-                        self._emit("⚠️ Diarization model %s not accessible; trying the next option..."
-                                   % (model_name or "(whisperx default)"))
+                with self._network_timeout():
+                    for model_name in candidates:
+                        kwargs: Dict[str, Any] = {token_kwarg: self._hf_token(), "device": device}
+                        if model_name:
+                            kwargs["model_name"] = model_name
+                        try:
+                            with self._hf_download_progress("speaker diarization model"):
+                                self._diarizer = DiarizationPipeline(**kwargs)
+                            break
+                        except Exception as exc:
+                            last_error = exc
+                            self._emit("⚠️ Diarization model %s not accessible; trying the next option..."
+                                       % (model_name or "(whisperx default)"))
                 if self._diarizer is None and last_error is not None:
                     raise last_error
+            self._set_work_phase("identifying speakers", False)
             self._emit("🗣️ Identifying speakers (can take several minutes on CPU)...")
             diarization = self._diarizer(audio)
             segments = assign_word_speakers(diarization, {"segments": segments}).get("segments", segments)
@@ -523,6 +727,8 @@ class TranscriptionProcessor:
         try:
             if not files:
                 raise ValueError("No supported audio or video files found")
+            if self.completion_callback:
+                self.completion_callback({"status": "processing_started", "total_audio": len(files)})
             self._emit("🎤 Found %d audio/video file(s)" % len(files))
             for index, path in enumerate(files):
                 if self._stop.is_set():
