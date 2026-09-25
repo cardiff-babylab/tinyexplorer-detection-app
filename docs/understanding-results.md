@@ -72,8 +72,6 @@
 
 === "Automatic Speech Recognition"
 
-=== "Speech Detection"
-
     ## CSV Output
 
     ### detections.csv
