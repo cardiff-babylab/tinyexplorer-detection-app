@@ -126,20 +126,17 @@
 
     Same columns as single file mode but provides one row per processed file.
     
-    ## Per-File Transcription Output
+    ### Per-File Transcription Output
 
     In addition to the combined `detections.csv` / `detections_words.csv`, the application also saves an individual pair of CSVs for **each processed file**, named after the source file:
 
     - `[filename]_transcript.csv` – same columns as `detections.csv`, scoped to that file only
     - `[filename]_words.csv` – same columns as `detections_words.csv`, scoped to that file only
-
+    - `[filename]_transcript.txt` – A human-readable transcript with one line per detected segment, formatted as:
+      
+      [start-end] Segment text
+      **start**, **end** – segment timestamps in seconds, matching `detections.csv` 
+    
     !!! note
         In **Single File Mode**, these per-file CSVs are identical to `detections.csv` and `detections_words.csv`, since only one file is processed.
         In **Folder Mode**, they diverge: `detections.csv` / `detections_words.csv` aggregate rows across *all* files in the folder, while `[filename]_transcript.csv` / `[filename]_words.csv` contain only the rows for that specific file — useful for reviewing or sharing results on a per-recording basis without filtering the combined output.
-
-    ### [filename]_transcript.txt
-
-    A human-readable transcript with one line per detected segment, formatted as:
-    [start-end] Segment text.
-    
-    - **start**, **end** – segment timestamps in seconds, matching `detections.csv`
