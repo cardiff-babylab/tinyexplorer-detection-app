@@ -856,28 +856,11 @@
   
 </li>
         
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
+          <li class="md-nav__item">
   <a href="#per-file-transcription-output" class="md-nav__link">
     <span class="md-ellipsis">
       
         Per-File Transcription Output
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Per-File Transcription Output">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#filename_transcripttxt" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        [filename]_transcript.txt
       
     </span>
   </a>
@@ -1332,28 +1315,11 @@
   
 </li>
         
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
+          <li class="md-nav__item">
   <a href="#per-file-transcription-output" class="md-nav__link">
     <span class="md-ellipsis">
       
         Per-File Transcription Output
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Per-File Transcription Output">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#filename_transcripttxt" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        [filename]_transcript.txt
       
     </span>
   </a>
@@ -1490,23 +1456,20 @@ This module is still under active development.</p>
 </ul>
 <h4 id="folder-mode_3">Folder Mode<a class="headerlink" href="#folder-mode_3" title="Permanent link">&para;</a></h4>
 <p>Same columns as single file mode but provides one row per processed file.</p>
-<h2 id="per-file-transcription-output">Per-File Transcription Output<a class="headerlink" href="#per-file-transcription-output" title="Permanent link">&para;</a></h2>
+<h3 id="per-file-transcription-output">Per-File Transcription Output<a class="headerlink" href="#per-file-transcription-output" title="Permanent link">&para;</a></h3>
 <p>In addition to the combined <code>detections.csv</code> / <code>detections_words.csv</code>, the application also saves an individual pair of CSVs for <strong>each processed file</strong>, named after the source file:</p>
 <ul>
 <li><code>[filename]_transcript.csv</code> – same columns as <code>detections.csv</code>, scoped to that file only</li>
 <li><code>[filename]_words.csv</code> – same columns as <code>detections_words.csv</code>, scoped to that file only</li>
+<li><code>[filename]_transcript.txt</code> – A human-readable transcript with one line per detected segment, formatted as:</li>
 </ul>
+<p>[start-end] Segment text
+  <strong>start</strong>, <strong>end</strong> – segment timestamps in seconds, matching <code>detections.csv</code> </p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>In <strong>Single File Mode</strong>, these per-file CSVs are identical to <code>detections.csv</code> and <code>detections_words.csv</code>, since only one file is processed.
 In <strong>Folder Mode</strong>, they diverge: <code>detections.csv</code> / <code>detections_words.csv</code> aggregate rows across <em>all</em> files in the folder, while <code>[filename]_transcript.csv</code> / <code>[filename]_words.csv</code> contain only the rows for that specific file — useful for reviewing or sharing results on a per-recording basis without filtering the combined output.</p>
 </div>
-<h3 id="filename_transcripttxt">[filename]_transcript.txt<a class="headerlink" href="#filename_transcripttxt" title="Permanent link">&para;</a></h3>
-<p>A human-readable transcript with one line per detected segment, formatted as:
-[start-end] Segment text.</p>
-<ul>
-<li><strong>start</strong>, <strong>end</strong> – segment timestamps in seconds, matching <code>detections.csv</code></li>
-</ul>
 </div>
 </div>
 </div>
