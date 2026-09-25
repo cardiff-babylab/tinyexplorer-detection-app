@@ -595,10 +595,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#sampling-rate" class="md-nav__link">
+  <a href="#sampling-rate-for-face-and-hand-detection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sampling Rate
+        Sampling Rate (for face and hand detection)
       
     </span>
   </a>
@@ -617,10 +617,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#face-recognition-process" class="md-nav__link">
+  <a href="#pipeline-details" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Face Recognition Process
+        Pipeline details
       
     </span>
   </a>
@@ -896,10 +896,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#sampling-rate" class="md-nav__link">
+  <a href="#sampling-rate-for-face-and-hand-detection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sampling Rate
+        Sampling Rate (for face and hand detection)
       
     </span>
   </a>
@@ -918,10 +918,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#face-recognition-process" class="md-nav__link">
+  <a href="#pipeline-details" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Face Recognition Process
+        Pipeline details
       
     </span>
   </a>
@@ -988,8 +988,9 @@
 <li>Browse and select entire folders containing multiple images and videos</li>
 </ul>
 <h2 id="model-selection">Model Selection<a class="headerlink" href="#model-selection" title="Permanent link">&para;</a></h2>
-<p>Choose from multiple face detection models:</p>
+<p>Choose from multiple models:</p>
 <ul>
+<li><strong>Face Detection</strong></li>
 <li><strong>YOLOv8n-face (Nano):</strong> fastest inference, smallest size (~2.7 MB); lower accuracy; ideal for real‑time or limited resources.</li>
 <li><strong>YOLOv8m-face (Medium):</strong> balanced speed and accuracy (~27.3 MB); solid default for most tasks.</li>
 <li><strong>YOLOv8l-face (Large):</strong> highest accuracy within v8 (~59.2 MB); slower inference; best for high precision.</li>
@@ -997,6 +998,13 @@
 <li><strong>YOLOv11l-face (Large):</strong> higher accuracy variant; increased compute and memory cost.</li>
 <li><strong>YOLOv12l-face (Large):</strong> latest large model; highest accuracy and resource use; recommended for offline batch processing.</li>
 <li><strong>RetinaFace:</strong> alternative architecture with facial landmarks; good speed/accuracy for feature localization. Note: available on Apple Silicon (arm64) macOS only. Source: <a href="https://github.com/serengil/retinaface">serengil/retinaface</a>.</li>
+<li><strong>Hand detection</strong></li>
+<li><strong>HandObject (100DOH baseline):</strong> </li>
+<li><strong>HandObject (100DOH TinyExplorer-tuned):</strong></li>
+<li><strong>Automatic speech recognition</strong>: available in sizes from tiny to large-v3-turbo (smaller sizes are faster but have lower accuracy; larger sizes are more accurate, but computationally heavy)</li>
+<li><strong>Whisper (OpenAI):</strong> </li>
+<li><strong>Faster Whisper:</strong></li>
+<li><strong>WhisperX:</strong></li>
 </ul>
 <p>The app automatically downloads required model weights when needed.</p>
 <h3 id="model-sources">Model Sources<a class="headerlink" href="#model-sources" title="Permanent link">&para;</a></h3>
@@ -1004,8 +1012,11 @@
 <li>YOLO face weights: <a href="https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models">cardiff-babylab/tinyexplorer-detection-app releases</a> (originally from <a href="https://github.com/akanametov/yolo-face">akanametov/yolo-face</a>)</li>
 <li>RetinaFace implementation: <a href="https://github.com/serengil/retinaface">serengil/retinaface</a></li>
 <li>Hand detection weights: <a href="https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/handobj-weights-v1">cardiff-babylab/tinyexplorer-detection-app releases</a> (HandObject / 100DOH Faster R‑CNN, originally from <a href="https://github.com/ddshan/hand_object_detector">ddshan/hand_object_detector</a>)</li>
+<li>Whisper (OpenAI): <a href="https://github.com/openai/whisper">openai/whisper</a></li>
+<li>Faster Whisper: <a href="https://github.com/SYSTRAN/faster-whisper">SYSTRAN/faster-whisper</a></li>
+<li>WhisperX: <a href="https://github.com/m-bain/whisperx">m-bain/whisperx</a></li>
 </ul>
-<h2 id="sampling-rate">Sampling Rate<a class="headerlink" href="#sampling-rate" title="Permanent link">&para;</a></h2>
+<h2 id="sampling-rate-for-face-and-hand-detection">Sampling Rate (for face and hand detection)<a class="headerlink" href="#sampling-rate-for-face-and-hand-detection" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Current sampling rate of 1 frame per second (1fps)</li>
 <li>Coming soon: adjustable slider for sampling rate</li>
@@ -1015,9 +1026,9 @@
 <li>Adjustable slider from 0.0 to 1.0</li>
 <li>Default confidence values tailored to each model</li>
 </ul>
-<h2 id="face-recognition-process">Face Recognition Process<a class="headerlink" href="#face-recognition-process" title="Permanent link">&para;</a></h2>
+<h2 id="pipeline-details">Pipeline details<a class="headerlink" href="#pipeline-details" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Works with images and videos</li>
+<li>Face and hand detection works with images and videos</li>
 <li>Batch processing for multiple files in a folder</li>
 <li>Real-time progress bar and percentage display</li>
 <li>Detailed logging of the recognition process</li>
