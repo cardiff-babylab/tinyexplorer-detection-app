@@ -65,9 +65,14 @@
 
 === "Hand Detection"
 
+    "Under Construction"
+    This module is still under active development.
+    
     ## CSV Output
 
-    --- under construction ---
+    ### results.csv
+
+    _Documentation coming soon._
 
 
 === "Automatic Speech Recognition"
