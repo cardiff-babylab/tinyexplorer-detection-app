@@ -5,24 +5,35 @@
 - Browse and select entire folders containing multiple images and videos
 
 ## Model Selection
-Choose from multiple face detection models:
+Choose from multiple models:
 
-- **YOLOv8n-face (Nano):** fastest inference, smallest size (~2.7 MB); lower accuracy; ideal for real‑time or limited resources.
-- **YOLOv8m-face (Medium):** balanced speed and accuracy (~27.3 MB); solid default for most tasks.
-- **YOLOv8l-face (Large):** highest accuracy within v8 (~59.2 MB); slower inference; best for high precision.
-- **YOLOv11m-face (Medium):** newer generation with improved accuracy/speed trade‑offs; good general‑purpose choice on modern hardware.
-- **YOLOv11l-face (Large):** higher accuracy variant; increased compute and memory cost.
-- **YOLOv12l-face (Large):** latest large model; highest accuracy and resource use; recommended for offline batch processing.
-- **RetinaFace:** alternative architecture with facial landmarks; good speed/accuracy for feature localization. Note: available on Apple Silicon (arm64) macOS only. Source: [serengil/retinaface](https://github.com/serengil/retinaface).
-
+- **Face Detection**
+  - **YOLOv8n-face (Nano):** fastest inference, smallest size (~2.7 MB); lower accuracy; ideal for real‑time or limited resources.
+  - **YOLOv8m-face (Medium):** balanced speed and accuracy (~27.3 MB); solid default for most tasks.
+  - **YOLOv8l-face (Large):** highest accuracy within v8 (~59.2 MB); slower inference; best for high precision.
+  - **YOLOv11m-face (Medium):** newer generation with improved accuracy/speed trade‑offs; good general‑purpose choice on modern hardware.
+  - **YOLOv11l-face (Large):** higher accuracy variant; increased compute and memory cost.
+  - **YOLOv12l-face (Large):** latest large model; highest accuracy and resource use; recommended for offline batch processing.
+  - **RetinaFace:** alternative architecture with facial landmarks; good speed/accuracy for feature localization. Note: available on Apple Silicon (arm64) macOS only. Source: [serengil/retinaface](https://github.com/serengil/retinaface).
+- **Hand detection**
+  - **HandObject (100DOH baseline):** 
+  - **HandObject (100DOH TinyExplorer-tuned):**
+- **Automatic speech recognition**: available in sizes from tiny to large-v3-turbo (smaller sizes are faster but have lower accuracy; larger sizes are more accurate, but computationally heavy)
+  - **Whisper (OpenAI):** 
+  - **Faster Whisper:**
+  - **WhisperX:**
+  
 The app automatically downloads required model weights when needed.
 
 ### Model Sources
 - YOLO face weights: [cardiff-babylab/tinyexplorer-detection-app releases](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models) (originally from [akanametov/yolo-face](https://github.com/akanametov/yolo-face))
 - RetinaFace implementation: [serengil/retinaface](https://github.com/serengil/retinaface)
 - Hand detection weights: [cardiff-babylab/tinyexplorer-detection-app releases](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/handobj-weights-v1) (HandObject / 100DOH Faster R‑CNN, originally from [ddshan/hand_object_detector](https://github.com/ddshan/hand_object_detector))
+- Whisper (OpenAI): [openai/whisper](https://github.com/openai/whisper)
+- Faster Whisper: [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper)
+- WhisperX: [m-bain/whisperx](https://github.com/m-bain/whisperx)
 
-## Sampling Rate
+## Sampling Rate (for face and hand detection)
 - Current sampling rate of 1 frame per second (1fps)
 - Coming soon: adjustable slider for sampling rate
   
@@ -30,8 +41,8 @@ The app automatically downloads required model weights when needed.
 - Adjustable slider from 0.0 to 1.0
 - Default confidence values tailored to each model
 
-## Face Recognition Process
-- Works with images and videos
+## Pipeline details
+- Face and hand detection works with images and videos
 - Batch processing for multiple files in a folder
 - Real-time progress bar and percentage display
 - Detailed logging of the recognition process
