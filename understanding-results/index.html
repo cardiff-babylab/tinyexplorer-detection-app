@@ -1427,6 +1427,7 @@ This module is still under active development.</p>
 <li><strong>label</strong> – detected label (e.g., <code>speech</code>)</li>
 <li><strong>confidence</strong> – model confidence/log-probability score for the segment</li>
 <li><strong>model</strong> – transcription model used (e.g. <code>Whisper (OpenAI)</code>)</li>
+<li><strong>model_size</strong> – Whisper model size used (e.g. <code>tiny</code>, <code>base</code>, <code>small</code>, <code>medium</code>, <code>large-v3</code>, <code>turbo</code>), as chosen in the size dropdown</li>
 <li><strong>text</strong> – transcribed text for the segment</li>
 <li><strong>language</strong> – detected or specified language code (e.g. <code>en</code>)</li>
 <li><strong>speaker</strong> – speaker label, if speaker diarization was enabled (blank otherwise)</li>
@@ -1441,6 +1442,8 @@ This module is still under active development.</p>
 <li><strong>start</strong>, <strong>end</strong> – start and end time of the word, in seconds</li>
 <li><strong>speaker</strong> – speaker label, if diarization was enabled (blank otherwise)</li>
 <li><strong>word_score</strong> – model confidence score for the individual word</li>
+<li><strong>model</strong> – transcription model used (e.g. <code>Whisper (OpenAI)</code>)</li>
+<li><strong>model_size</strong> – Whisper model size used (e.g. <code>tiny</code>, <code>base</code>, <code>small</code>, <code>medium</code>, <code>large-v3</code>, <code>turbo</code>), as chosen in the size dropdown</li>
 <li><strong>segment_start</strong>, <strong>segment_end</strong> – start and end time of the parent segment the word belongs to</li>
 <li><strong>segment_text</strong> – full text of the parent segment, for cross-reference with <code>detections.csv</code></li>
 </ul>
@@ -1453,6 +1456,7 @@ This module is still under active development.</p>
 <li><strong>duration</strong> – total duration of the file, in seconds</li>
 <li><strong>language</strong> – detected or specified language code</li>
 <li><strong>model</strong> – transcription model used</li>
+<li><strong>model_size</strong> – Whisper model size used (e.g. <code>tiny</code>, <code>base</code>, <code>small</code>, <code>medium</code>, <code>large-v3</code>, <code>turbo</code>), as chosen in the size dropdown</li>
 </ul>
 <h4 id="folder-mode_3">Folder Mode<a class="headerlink" href="#folder-mode_3" title="Permanent link">&para;</a></h4>
 <p>Same columns as single file mode but provides one row per processed file.</p>
@@ -1461,7 +1465,7 @@ This module is still under active development.</p>
 <ul>
 <li><code>[filename]_transcript.csv</code> – same columns as <code>detections.csv</code>, scoped to that file only</li>
 <li><code>[filename]_words.csv</code> – same columns as <code>detections_words.csv</code>, scoped to that file only</li>
-<li><code>[filename]_transcript.txt</code> – A human-readable transcript with one line per detected segment, formatted as:</li>
+<li><code>[filename]_transcript.txt</code> – A human-readable transcript. The first line records the model and size (e.g. <code># Model: Faster Whisper (small)</code>), followed by one line per detected segment, formatted as:</li>
 </ul>
 <p>[start-end] Segment text
   <strong>start</strong>, <strong>end</strong> – segment timestamps in seconds, matching <code>detections.csv</code> </p>
