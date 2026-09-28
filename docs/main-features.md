@@ -17,8 +17,8 @@ Choose from multiple models:
 - **RetinaFace:** alternative architecture with facial landmarks; good speed/accuracy for feature localization. Note: available on Apple Silicon (arm64) macOS only. Source: https://github.com/serengil/retinaface.
 
 #### Hand Detection
-- **HandObject (100DOH baseline) - Hand_object_detector model by ddshan, trained on 100DOH dataset**
-- **HandObject (100DOH TinyExplorer-tuned) - TinyExplored-Tuned version of the 100DOH hand_object_detector, targeted at detecting infant hands with ownership classification integrated**
+- **HandObject (100DOH baseline)** - Hand_object_detector model by ddshan, trained on 100DOH dataset
+- **HandObject (100DOH TinyExplorer-tuned)** - TinyExplored-Tuned version of the 100DOH hand_object_detector, targeted at detecting infant hands with ownership classification integrated
 
 #### Automatic Speech Recognition
 - **Whisper (OpenAI)**
