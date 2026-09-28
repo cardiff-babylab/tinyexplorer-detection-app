@@ -70,9 +70,49 @@
     
     ## CSV Output
 
-    ### results.csv
+    ### detections.csv
+    The 'detections.csv' file contains per detection information, where each record represents one hand detected
 
-    _Documentation coming soon._
+    - **dataset** – Name of processed dataset/Folder title
+    - **filename** – Name of processed image/video frame
+    - **hand_id** – hand identifier assigned to each detected hand within a frame (Starting at 0, i.e if 4 hands are present, labels will be 0,1,2, and 3
+    - **hand_x1** – x-coordinate of the left edge of the bounding box
+    - **hand_y1** – y-coordinate of the top edge of the bounding box
+    - **hand_x2** – x-coordinate of the right edge of the bounding box
+    - **hand_y2** – y-coordinate of the bottom edge of the bounding box
+    - **Hand_confidence** – Confidence score of the detected hand
+    - **State** – Predicted hand state ID (0 - No touch, 1 - Self touch, 2 - Other touch, 3 - Portable object touch, 4 - Furniture touch)
+    - **Hand_side** – Predicted hand side ('Left' or 'Right')
+    - **Owner_label** – Predicted owner label ('Own' or 'Other')
+    - **frame_idx** – Video frame index, where available 
+    - **state_raw** – raw state ID output
+    - **state_label** – human-readable contact state label
+    
+
+    ### summary.csv
+    The 'summary.csv' file contains a frame-level summary of the overall hand detections. Each record represents one processed image/video frame
+
+    - **filename** – Name of processed image/video frames
+    - **frame_idx** – Video frame index, where available 
+    - **img_w** – image width in pixels
+    - **img_h** – image height in pixels
+    - **n_hands** – Total number of hands detected in the frame
+    - **n_own** – Total number of own hands detected in the frame
+    - **n_other** – Total number of other hands detected in the frame
+    - **n_state0_none** – Total number of detected hands classified as having no contact
+    - **n_state1_self** – Total number of detected hands classified as touching self (Body belonging to hand owner)
+    - **n_state2_other** – Total number of detected hands classified as touching another person (not self)
+    - **n_state3_portable** – Total number of detected hands classified as interacting with a portable object
+    - **n_state3_furniture** – Total number of detected hands classified as interacting with furniture/fixed environmental surface i.e. Floor, door, sofa
+    
+    
+   ### Visualisation outputs
+
+   Under construction
+
+   ## Baseline
+
+   ## Tuned
 
 
 === "Automatic Speech Recognition"
