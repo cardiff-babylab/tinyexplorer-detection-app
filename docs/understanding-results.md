@@ -2,7 +2,7 @@
 
 === "Face Detection"
 
-    ## CSV Output
+    ## Face Detection - CSV Output
 
     ### results.csv
 
@@ -68,7 +68,7 @@
     "Under Construction"
     This module is still under active development.
     
-    ## CSV Output
+    ## Hand Detection - CSV Output
 
     ### detections.csv
     The 'detections.csv' file contains per detection information, where each record represents one hand detected
@@ -116,7 +116,7 @@
 
 === "Automatic Speech Recognition"
 
-    ## CSV Output
+    ## Speech Recognition - CSV Output
 
     ### detections.csv
 
