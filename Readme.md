@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/github/license/cardiff-babylab/tinyexplorer-detection-app)](LICENSE.txt)
 
 <div align="center">
-  <img src="docs/assets/screenshots/app-main-interface.png" alt="TinyExplorer Detection App Interface" />
+  <img src="docs/assets/screenshots/app-main-interface_updated.png" alt="TinyExplorer Detection App Interface" />
   <br>
   <em>Main application interface showing file selection, model options, and confidence threshold controls</em>
 </div>
