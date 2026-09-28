@@ -105,14 +105,13 @@
     - **n_state3_portable** – Total number of detected hands classified as interacting with a portable object
     - **n_state3_furniture** – Total number of detected hands classified as interacting with furniture/fixed environmental surface i.e. Floor, door, sofa
     
+    ### Visualisation outputs
+    Under construction
     
-   ### Visualisation outputs
-
-   Under construction
-
-   ## Baseline
-
-   ## Tuned
+    ### Baseline
+    Under construction
+    ### Tuned
+    Under construction
 
 
 === "Automatic Speech Recognition"
