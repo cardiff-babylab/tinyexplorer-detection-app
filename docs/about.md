@@ -2,7 +2,7 @@
 
 ## About the Project
 
-The TinyExplorer Detection App is a user-friendly graphical interface designed with developmental scientists in mind. This toolbox integrates state-of-the-art open-source face recognition algorithms into an easy-to-use software package, streamlining the process of analysing facial data.
+The TinyExplorer Detection App is a user-friendly graphical interface designed with developmental scientists in mind. This toolbox integrates state-of-the-art open-source face-detection, hand-detection and audio transcription models into an easy-to-use software package, streamlining the process of analysing infant data.
 
 ## Copyright & Attribution
 
