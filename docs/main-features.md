@@ -17,8 +17,8 @@ Choose from multiple models:
 - **RetinaFace:** alternative architecture with facial landmarks; good speed/accuracy for feature localization. Note: available on Apple Silicon (arm64) macOS only. Source: https://github.com/serengil/retinaface.
 
 #### Hand Detection
-- **HandObject (100DOH baseline)**
-- **HandObject (100DOH TinyExplorer-tuned)**
+- **HandObject (100DOH baseline) - Hand_object_detector model by ddshan, trained on 100DOH dataset**
+- **HandObject (100DOH TinyExplorer-tuned) - TinyExplored-Tuned version of the 100DOH hand_object_detector, targeted at detecting infant hands with ownership classification integrated**
 
 #### Automatic Speech Recognition
 - **Whisper (OpenAI)**
@@ -29,7 +29,7 @@ Available in sizes from `tiny` to `large-v3-turbo`. Smaller sizes are faster but
 ### Model Sources
 - YOLO face weights: [cardiff-babylab/tinyexplorer-detection-app releases](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models) (originally from [akanametov/yolo-face](https://github.com/akanametov/yolo-face))
 - RetinaFace implementation: [serengil/retinaface](https://github.com/serengil/retinaface)
-- Hand detection weights: [cardiff-babylab/tinyexplorer-detection-app releases](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/handobj-weights-v1) (HandObject / 100DOH Faster R‑CNN, originally from [ddshan/hand_object_detector](https://github.com/ddshan/hand_object_detector))
+- Hand detection weights: [cardiff-babylab/tinyexplorer-detection-app releases](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/handobj-weights-v1) (HandObject / 100DOH Faster R‑CNN, originally from [ddshan/hand_object_detector](https://github.com/ddshan/hand_object_detector)). TinyExplorer-Tuned version at: [100DOH-TinyExplorer-Tuned](https://github.com/CraigThomp1/100DOH-TinyExplorer-Tuned-hand-detection/tree/main)
 - Whisper (OpenAI): [openai/whisper](https://github.com/openai/whisper)
 - Faster Whisper: [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper)
 - WhisperX: [m-bain/whisperx](https://github.com/m-bain/whisperx)
