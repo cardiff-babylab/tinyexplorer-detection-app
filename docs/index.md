@@ -1,6 +1,6 @@
 ---
 title: TinyExplorer Detection App
-description: Desktop face detection app for developmental research using YOLO and RetinaFace. Batch processing with CSV exports and visual outputs.
+description: Desktop detection app for developmental research using face detection, hand detection and audio transcription models. Batch processing with CSV exports and visual outputs.
 image: assets/images/dragon.png
 ---
 
@@ -13,7 +13,7 @@ image: assets/images/dragon.png
 </div>
 
 ## Overview
-The TinyExplorer Detection App is a user-friendly graphical interface designed specifically for developmental psychologists working with infants and young children. This toolbox integrates state-of-the-art open-source face recognition algorithms into an easy-to-use software package, streamlining the process of analyzing facial data in developmental research.
+The TinyExplorer Detection App is a user-friendly graphical interface designed specifically for developmental psychologists working with infants and young children. This toolbox integrates state-of-the-art open-source detection and transcription models into an easy-to-use software package, streamlining the process of analyzing infant data in developmental research.
 
 ## Features
 - Simple graphical user interface for easy operation
