@@ -27,7 +27,7 @@ The TinyExplorer Detection App is a user-friendly graphical interface designed w
 
 This application was developed to support developmental psychology research at Cardiff Babylab, enabling:
 
-- Automated face detection in experimental recordings
+- Automated face, hand and speech detection in experimental recordings
 - Batch processing of research data
 - Standardized data extraction for statistical analysis
 - Cross-platform deployment for research teams

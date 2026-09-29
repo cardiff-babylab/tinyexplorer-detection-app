@@ -133,7 +133,7 @@ Choose your operating system below for specific installation instructions:
 
 ## First Launch
 
-When you first launch the application, you'll see the main interface with all the controls needed for face detection.
+When you first launch the application, you'll see the main interface with all the controls needed for face, hand and speech detection.
 
 ## Interface Overview
 
@@ -146,7 +146,7 @@ When you first launch the application, you'll see the main interface with all th
 The main interface contains:
 
 - **File/Folder Selection** – choose images or videos for processing
-- **Model Selection** – pick the face detection model
+- **Model Selection** – pick the model that fits your needs
 - **Confidence Threshold** – adjust detection sensitivity
 - **Start** – begin the recognition process
 - **Results Display** – view detection outputs
