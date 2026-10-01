@@ -16,11 +16,11 @@ Choose from multiple models:
 - **YOLOv12l-face (Large):** latest large model; highest accuracy and resource use; recommended for offline batch processing.
 - **RetinaFace:** alternative architecture with facial landmarks; good speed/accuracy for feature localization. Note: available on Apple Silicon (arm64) macOS only. Source: https://github.com/serengil/retinaface.
 
-#### Hand Detection (model performance evaluated by the Cardiff Babylab)
+#### Hand Detection
 - **HandObject (100DOH baseline)** - Hand_object_detector model by ddshan, trained on 100DOH dataset
 - **HandObject (100DOH TinyExplorer-tuned)** - TinyExplored-Tuned version of the 100DOH hand_object_detector, targeted at detecting infant hands with ownership classification integrated
 
-#### Automatic Speech Recognition (model performance not evaluated by the Cardiff Babylab)
+#### Automatic Speech Recognition
 - **Whisper (OpenAI)**
 - **Faster Whisper**
 - **WhisperX**
