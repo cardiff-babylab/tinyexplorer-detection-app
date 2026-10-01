@@ -21,13 +21,14 @@ Choose from multiple models:
 - **HandObject (100DOH TinyExplorer-tuned)** - TinyExplored-Tuned version of the 100DOH hand_object_detector, targeted at detecting infant hands with ownership classification integrated
 
 #### Automatic Speech Recognition
+
 - **Whisper (OpenAI)**
 - **Faster Whisper**
 - **WhisperX**
 
 Available in sizes from `tiny` to `large-v3-turbo`. Smaller sizes are faster but have lower accuracy; larger sizes are more accurate but computationally heavier.
 
-*The performance of these models has not been assessed by the Cardiff Babylab.* More information can be found in [Model evaluation](https://cardiff-babylab.github.io/tinyexplorer-detection-app/benchmarking/)
+**The performance of these models has not been assessed by the Cardiff Babylab.** More information can be found in [Model evaluation](https://cardiff-babylab.github.io/tinyexplorer-detection-app/benchmarking/)
 
 ### Model Sources
 - YOLO face weights: [cardiff-babylab/tinyexplorer-detection-app releases](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models) (originally from [akanametov/yolo-face](https://github.com/akanametov/yolo-face))
