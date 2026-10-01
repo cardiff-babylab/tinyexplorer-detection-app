@@ -102,6 +102,9 @@ https://aka.ms/vs/17/release/vc_redist.x64.exe.
 - YOLO face weights: https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models (originally from https://github.com/akanametov/yolo-face)
 - RetinaFace implementation: https://github.com/serengil/retinaface
 - Hand detection weights: https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/handobj-weights-v1 (HandObject / 100DOH Faster R‑CNN, originally from https://github.com/ddshan/hand_object_detector)
+- Whisper (OpenAI): [openai/whisper](https://github.com/openai/whisper)
+- Faster Whisper: [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper)
+- WhisperX: [m-bain/whisperx](https://github.com/m-bain/whisperx)
   
 ## Value for Developmental Psychologists
 
