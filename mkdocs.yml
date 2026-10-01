@@ -46,6 +46,7 @@ nav:
   - Getting Started: getting-started.md
   - Main Features: main-features.md
   - Understanding Results: understanding-results.md
+  - Model evaluation: benchmarking.md
   - Performance: performance.md
   - Troubleshooting: troubleshooting.md
   - Support and Updates: support.md
