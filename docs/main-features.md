@@ -16,15 +16,16 @@ Choose from multiple models:
 - **YOLOv12l-face (Large):** latest large model; highest accuracy and resource use; recommended for offline batch processing.
 - **RetinaFace:** alternative architecture with facial landmarks; good speed/accuracy for feature localization. Note: available on Apple Silicon (arm64) macOS only. Source: https://github.com/serengil/retinaface.
 
-#### Hand Detection
+#### Hand Detection (model performance evaluated by the Cardiff Babylab)
 - **HandObject (100DOH baseline)** - Hand_object_detector model by ddshan, trained on 100DOH dataset
 - **HandObject (100DOH TinyExplorer-tuned)** - TinyExplored-Tuned version of the 100DOH hand_object_detector, targeted at detecting infant hands with ownership classification integrated
 
-#### Automatic Speech Recognition
+#### Automatic Speech Recognition (model performance not evaluated by the Cardiff Babylab)
 - **Whisper (OpenAI)**
 - **Faster Whisper**
 - **WhisperX**
 Available in sizes from `tiny` to `large-v3-turbo`. Smaller sizes are faster but have lower accuracy; larger sizes are more accurate but computationally heavier.
+*The performance of these models has not been assessed by the Cardiff Babylab.* More information can be found in [Model evaluation](https://cardiff-babylab.github.io/tinyexplorer-detection-app/benchmarking/)
 
 ### Model Sources
 - YOLO face weights: [cardiff-babylab/tinyexplorer-detection-app releases](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models) (originally from [akanametov/yolo-face](https://github.com/akanametov/yolo-face))
@@ -35,7 +36,6 @@ Available in sizes from `tiny` to `large-v3-turbo`. Smaller sizes are faster but
 - WhisperX: [m-bain/whisperx](https://github.com/m-bain/whisperx)
 
 The app automatically downloads required model weights when needed.
-
 
 ## Sampling Rate (for face and hand detection)
 - Current sampling rate of 1 frame per second (1fps)
