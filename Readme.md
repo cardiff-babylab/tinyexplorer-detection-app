@@ -43,6 +43,13 @@ Choose from multiple face detection models included in the app:
 - YOLOv12l-face (Large): latest large model; highest accuracy and resource use; recommended for offline batch processing.
 - RetinaFace: alternative architecture with facial landmarks; good speed/accuracy for feature localization. Note: available on Apple Silicon (arm64) macOS only.
 
+## Hand Detection
+
+Choose from multiple hand detection models included in the app:
+
+- HandObject (100DOH baseline) - Hand_object_detector model by ddshan, trained on 100DOH dataset
+- HandObject (100DOH TinyExplorer-tuned) - TinyExplored-Tuned version of the 100DOH hand_object_detector, targeted at detecting infant hands with ownership classification integrated
+
 ### Audio transcription
 
 The Speech mode extracts timestamped transcripts from audio files and videos. It
@@ -102,6 +109,9 @@ https://aka.ms/vs/17/release/vc_redist.x64.exe.
 - YOLO face weights: https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models (originally from https://github.com/akanametov/yolo-face)
 - RetinaFace implementation: https://github.com/serengil/retinaface
 - Hand detection weights: https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/handobj-weights-v1 (HandObject / 100DOH Faster R‑CNN, originally from https://github.com/ddshan/hand_object_detector)
+- Whisper (OpenAI): [openai/whisper](https://github.com/openai/whisper)
+- Faster Whisper: [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper)
+- WhisperX: [m-bain/whisperx](https://github.com/m-bain/whisperx)
   
 ## Value for Developmental Psychologists
 
