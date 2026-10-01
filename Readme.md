@@ -43,6 +43,13 @@ Choose from multiple face detection models included in the app:
 - YOLOv12l-face (Large): latest large model; highest accuracy and resource use; recommended for offline batch processing.
 - RetinaFace: alternative architecture with facial landmarks; good speed/accuracy for feature localization. Note: available on Apple Silicon (arm64) macOS only.
 
+## Hand Detection
+
+Choose from multiple hand detection models included in the app:
+
+- HandObject (100DOH baseline) - Hand_object_detector model by ddshan, trained on 100DOH dataset
+- HandObject (100DOH TinyExplorer-tuned) - TinyExplored-Tuned version of the 100DOH hand_object_detector, targeted at detecting infant hands with ownership classification integrated
+
 ### Audio transcription
 
 The Speech mode extracts timestamped transcripts from audio files and videos. It
