@@ -24,7 +24,9 @@ Choose from multiple models:
 - **Whisper (OpenAI)**
 - **Faster Whisper**
 - **WhisperX**
+
 Available in sizes from `tiny` to `large-v3-turbo`. Smaller sizes are faster but have lower accuracy; larger sizes are more accurate but computationally heavier.
+
 *The performance of these models has not been assessed by the Cardiff Babylab.* More information can be found in [Model evaluation](https://cardiff-babylab.github.io/tinyexplorer-detection-app/benchmarking/)
 
 ### Model Sources
@@ -34,6 +36,7 @@ Available in sizes from `tiny` to `large-v3-turbo`. Smaller sizes are faster but
 - Whisper (OpenAI): [openai/whisper](https://github.com/openai/whisper)
 - Faster Whisper: [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper)
 - WhisperX: [m-bain/whisperx](https://github.com/m-bain/whisperx)
+
 
 The app automatically downloads required model weights when needed.
 
