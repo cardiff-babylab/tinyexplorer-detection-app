@@ -10,7 +10,7 @@
 === "Hand Detection"
 
     We evaluated 6 open-source hand detection algorithms, with 100 Days of Hands (100DOH) showing the strongest hand-detection performance (presence of hands: 96% precision and 91% recall; hand classification [own or other]: 87% accuracy).
-    Beyond model evaluation, we also fine-tuned the 100 Days of Hands on the TinyExplorer data. Both models are available on the TinyExplorer app.
+    Beyond model evaluation, we also fine-tuned the 100 Days of Hands on the TinyExplorer data (100DOH TinyExplorer-tuned). Both models are available on the TinyExplorer app.
 
 === "Automatic Speech Recognition"
 
