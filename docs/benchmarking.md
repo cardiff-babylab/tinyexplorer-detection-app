@@ -14,6 +14,6 @@
 
 === "Automatic Speech Recognition"
 
-    Several speech recognition models are available for analysing children's naturalistic speech. We have not evaluated the performance of these models.
+    Several speech recognition models are available for analysing children's naturalistic speech on the app. We have not evaluated the performance of these models.
     
     For more information read [Radford et al. (2023), *Robust Speech Recognition via Large-Scale Weak Supervision*](https://arxiv.org/abs/2212.04356)
