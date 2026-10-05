@@ -50,6 +50,14 @@ Choose from multiple hand detection models included in the app:
 - HandObject (100DOH baseline) - Hand_object_detector model by ddshan, trained on 100DOH dataset
 - HandObject (100DOH TinyExplorer-tuned) - TinyExplored-Tuned version of the 100DOH hand_object_detector, targeted at detecting infant hands with ownership classification integrated
 
+In order to use the 100DOH TinyExplorer-tuned model within the app, <b>you must first gain access to the model via HuggingFace </b>and provide an access token.
+
+Find the link to the model here:
+https://huggingface.co/ThompsonC21/100DOH-TinyExplorer-Tuned-hand-detection
+
+Find information on obtaining an access token here: https://huggingface.co/docs/hub/en/security-tokens
+    
+
 ### Audio transcription
 
 The Speech mode extracts timestamped transcripts from audio files and videos. It
