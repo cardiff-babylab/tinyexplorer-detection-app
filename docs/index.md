@@ -44,7 +44,7 @@ See also: [Supported File Formats](main-features.md#supported-file-formats).
 - [Getting Started](getting-started.md)
 - [Main Features](main-features.md)
 - [Understanding Results](understanding-results.md)
-- [Advanced Options](advanced-options.md)
+- [Model evaluation](benchmarking.md)
 - [Troubleshooting](troubleshooting.md)
 - [Support and Updates](support.md)
 - [About](about.md)
