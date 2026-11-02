@@ -27,6 +27,8 @@ Choose from multiple models:
 - **WhisperX**
 
 Available in sizes from `tiny` to `large-v3-turbo`. Smaller sizes are faster but have lower accuracy; larger sizes are more accurate but computationally heavier.
+If you need diarization (knowing which speaker said what), you will need to provide a Hugging Face token that gives you access to **Pyannote**. Find information on obtaining an access token here: https://huggingface.co/docs/hub/en/security-tokens
+The models still run without the token, just without the diarization. If you want to struggle with this, please email us.
 
 **The performance of these models has not been assessed by the Cardiff Babylab.** More information can be found in [Model evaluation](https://cardiff-babylab.github.io/tinyexplorer-detection-app/benchmarking/)
 
