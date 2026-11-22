@@ -48,17 +48,23 @@ Choose from multiple face detection models included in the app:
 Choose from multiple hand detection models included in the app:
 
 - HandObject (100DOH baseline) - Hand_object_detector model by ddshan, trained on 100DOH dataset
-- HandObject (100DOH TinyExplorer-tuned) - TinyExplored-Tuned version of the 100DOH hand_object_detector, targeted at detecting infant hands with ownership classification integrated
+- HandObject (100DOH TinyExplorer-tuned)* - TinyExplored-Tuned version of the 100DOH hand_object_detector, targeted at detecting infant hands with ownership classification integrated
 
-In order to use the 100DOH TinyExplorer-tuned model within the app, <b>you must first gain access to the model via HuggingFace </b>and provide an access token.
+\*The 100DOH TinyExplorer-tuned model was fine-tuned using naturalistic head-camera footage collected from young children, therefore given the sensitive nature of the research data used, access to the model weights is restricted to support responsible research use.
+If you'd like to use this model within the app, <b>you must first make an access request via HuggingFace and provide relevant institutional information </b>
 
-Find the link to the model here:
-https://huggingface.co/ThompsonC21/100DOH-TinyExplorer-Tuned-hand-detection
+#### Linking 100DOH TET model access to the app
+Please use the following link to request access to the 100DOH TinyExplorer-tuned model : https://huggingface.co/ThompsonC21/100DOH-TinyExplorer-Tuned-hand-detection
 
-Find information on obtaining an access token here: https://huggingface.co/docs/hub/en/security-tokens
-    
+We aim to answer requests within 1-3 days, and you will receive a confirmation email after your request has been processed.
 
-### Audio transcription
+Once access has been granted, please follow the steps below:
+1. Navigate to the 'Access Tokens' page, after clicking on your HuggingFace profile icon.
+2. Create a Read token to be used within the app
+3. Copy the token and paste it into the huggingface prompt within the TinyExplorer detection app after selecting '100DOH TinyExplorer-Tuned.
+4. Run the model!
+
+## Audio transcription
 
 The Speech mode extracts timestamped transcripts from audio files and videos. It
 supports OpenAI Whisper, Faster Whisper, and WhisperX. Results are written to a
