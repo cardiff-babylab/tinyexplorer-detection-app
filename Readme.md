@@ -22,10 +22,11 @@
   - [Build and Run Locally (fallback)](#build-and-run-locally-fallback)
   - [See Also (Documentation)](#see-also-documentation)
 - [Privacy & Data Security](#privacy--data-security)
-- [Face Detection Models](#face-detection-models)
-- [Hand Detection](#hand-detection)
+- [Models](#models)
+  - [Face Detection Models](#face-detection-models)
+  - [Hand Detection](#hand-detection)
     - [Linking 100DOH TET model access to the app](#linking-100doh-tet-model-access-to-the-app)
-- [Audio transcription](#audio-transcription)
+  - [Audio transcription](#audio-transcription)
     - [Speech performance (Windows)](#speech-performance-windows)
   - [Model Sources](#model-sources)
 - [Value for Developmental Psychologists](#value-for-developmental-psychologists)
@@ -73,7 +74,9 @@ If no release exists for your system or the installer doesn't work, you can buil
 - Models are downloaded once and stored locally
 - Ideal for working with sensitive research data involving human subjects
 
-## Face Detection Models
+## Models
+
+### Face Detection Models
 
 Choose from multiple face detection models included in the app:
 
@@ -85,7 +88,7 @@ Choose from multiple face detection models included in the app:
 - YOLOv12l-face (Large): latest large model; highest accuracy and resource use; recommended for offline batch processing.
 - RetinaFace: alternative architecture with facial landmarks; good speed/accuracy for feature localization. Note: available on Apple Silicon (arm64) macOS only.
 
-## Hand Detection
+### Hand Detection
 
 Choose from multiple hand detection models included in the app:
 
@@ -96,7 +99,7 @@ Choose from multiple hand detection models included in the app:
 If you'd like to use this model within the app, <b>you must first make an access request via HuggingFace and provide relevant institutional information </b>
 
 #### Linking 100DOH TET model access to the app
-Please use the following link to request access to the 100DOH TinyExplorer-tuned model : https://huggingface.co/ThompsonC21/100DOH-TinyExplorer-Tuned-hand-detection
+Please use the following link to request access to the 100DOH TinyExplorer-tuned model: https://huggingface.co/ThompsonC21/100DOH-TinyExplorer-Tuned-hand-detection
 
 We aim to answer requests within 1-3 days, and you will receive a confirmation email after your request has been processed.
 
@@ -106,7 +109,7 @@ Once access has been granted, please follow the steps below:
 3. Copy the token and paste it into the huggingface prompt within the TinyExplorer detection app after selecting '100DOH TinyExplorer-Tuned.
 4. Run the model!
 
-## Audio transcription
+### Audio transcription
 
 The Speech mode extracts timestamped transcripts from audio files and videos. It
 supports OpenAI Whisper, Faster Whisper, and WhisperX. Results are written to a
