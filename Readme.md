@@ -12,6 +12,16 @@
 
 ## Table of Contents
 
+<!--
+TEAM NOTE:
+Whenever you add, remove or rename headings in this README,
+update the table of contents by running:
+
+npx doctoc Readme.md
+
+Do not edit the generated TOC manually.
+-->
+
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
