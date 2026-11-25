@@ -57,13 +57,13 @@ The TinyExplorer Detection App is a user-friendly graphical interface designed w
 - Batch processing capabilities for efficient analysis of large datasets
 - Customizable confidence thresholds for detection accuracy
 
-## Getting Started
+## Getting started
 
 ### Install a Prebuilt Release (recommended)
 - Download the latest installer for your OS from the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases).
 - Run the installer and launch the app following the instructions in the [Getting started page](https://cardiff-babylab.github.io/tinyexplorer-detection-app/getting-started/).
 
-### Build and Run Locally (fallback)
+### Build and run locally (fallback)
 If no release exists for your system or the installer doesn't work, you can build locally.
 
 - Ensure [Node.js](https://nodejs.org/) and [npm](https://www.npmjs.com/) are installed.
@@ -71,11 +71,11 @@ If no release exists for your system or the installer doesn't work, you can buil
 - Start in development: `npm run start`
 - Build a distributable package: `npm run build`
 
-### See Also (Documentation)
-- Basic Usage: https://cardiff-babylab.github.io/tinyexplorer-detection-app/getting-started
-- Supported File Formats: https://cardiff-babylab.github.io/tinyexplorer-detection-app/main-features/#supported-file-formats
+### See also (Documentation)
+- Basic usage: https://cardiff-babylab.github.io/tinyexplorer-detection-app/getting-started
+- Supported file formats: https://cardiff-babylab.github.io/tinyexplorer-detection-app/main-features/#supported-file-formats
 
-## Privacy & Data Security
+## Privacy & data security
 
 **All processing is performed entirely on your local machine.** No images, videos, or detection results are ever uploaded to external servers. Your research data stays completely private and under your control.
 
@@ -84,9 +84,9 @@ If no release exists for your system or the installer doesn't work, you can buil
 - Models are downloaded once and stored locally
 - Ideal for working with sensitive research data involving human subjects
 
-## Models
+## Available models
 
-### Face Detection Models
+### Face detection
 
 Choose from multiple face detection models included in the app:
 
@@ -121,7 +121,7 @@ Once access has been granted, please follow the steps below:
 
 ### Audio transcription
 
-The Speech mode extracts timestamped transcripts from audio files and videos. It
+The audio transcription models extract timestamped transcripts from audio files and videos. It
 supports OpenAI Whisper, Faster Whisper, and WhisperX. Results are written to a
 timestamped folder as both `<file>_transcript.txt` and
 `<file>_transcript.csv`, plus shared `detections.csv` and `summary.csv` files
@@ -182,7 +182,7 @@ https://aka.ms/vs/17/release/vc_redist.x64.exe.
 - Faster Whisper: [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper)
 - WhisperX: [m-bain/whisperx](https://github.com/m-bain/whisperx)
   
-## Value for Developmental Psychologists
+## Value for developmental psychologists
 
 This toolbox addresses several key needs in developmental psychology research:
 
@@ -191,7 +191,7 @@ This toolbox addresses several key needs in developmental psychology research:
 - Flexibility: Allows researchers to easily switch between different face recognition models to suit their specific research needs.
 - Reproducibility: Ensures consistent application of face detection criteria across studies, enhancing research reproducibility.
 
-## Development and Contributions
+## Development and contributions
 
 This toolbox is actively developed by the Cardiff University BabyLab, a research group dedicated to exploring attentional and motor skills in young children and their impact on learning in everyday settings. We welcome contributions from the developmental psychology community to enhance and expand the capabilities of this toolbox.
 
