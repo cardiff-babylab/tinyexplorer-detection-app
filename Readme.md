@@ -21,6 +21,24 @@ The TinyExplorer Detection App is a user-friendly graphical interface designed w
 - Batch processing capabilities for efficient analysis of large datasets
 - Customizable confidence thresholds for detection accuracy
 
+## Getting Started
+
+### Install a Prebuilt Release (recommended)
+- Download the latest installer for your OS from the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases).
+- Run the installer and launch the app following the instructions in the [Getting started page](https://cardiff-babylab.github.io/tinyexplorer-detection-app/getting-started/).
+
+### Build and Run Locally (fallback)
+If no release exists for your system or the installer doesn't work, you can build locally.
+
+- Ensure [Node.js](https://nodejs.org/) and [npm](https://www.npmjs.com/) are installed.
+- Install dependencies: `npm install`
+- Start in development: `npm run start`
+- Build a distributable package: `npm run build`
+
+### See Also (Documentation)
+- Basic Usage: https://cardiff-babylab.github.io/tinyexplorer-detection-app/getting-started
+- Supported File Formats: https://cardiff-babylab.github.io/tinyexplorer-detection-app/main-features/#supported-file-formats
+
 ## Privacy & Data Security
 
 **All processing is performed entirely on your local machine.** No images, videos, or detection results are ever uploaded to external servers. Your research data stays completely private and under your control.
@@ -29,7 +47,6 @@ The TinyExplorer Detection App is a user-friendly graphical interface designed w
 - No internet connection required after initial model download
 - Models are downloaded once and stored locally
 - Ideal for working with sensitive research data involving human subjects
-
 
 ## Face Detection Models
 
@@ -145,24 +162,6 @@ If you have ideas for new features, improvements, or bug fixes, please feel free
 - Submit a pull request
 - Open an issue with your suggestion
 - Contact us directly with your ideas
-
-## Getting Started
-
-### Install a Prebuilt Release (recommended)
-- Download the latest installer for your OS from the [Releases page](https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases).
-- Run the installer and launch the app following the instructions in the [Getting started page](https://cardiff-babylab.github.io/tinyexplorer-detection-app/getting-started/).
-
-### Build and Run Locally (fallback)
-If no release exists for your system or the installer doesn't work, you can build locally.
-
-- Ensure [Node.js](https://nodejs.org/) and [npm](https://www.npmjs.com/) are installed.
-- Install dependencies: `npm install`
-- Start in development: `npm run start`
-- Build a distributable package: `npm run build`
-
-### See Also (Documentation)
-- Basic Usage: https://cardiff-babylab.github.io/tinyexplorer-detection-app/getting-started
-- Supported File Formats: https://cardiff-babylab.github.io/tinyexplorer-detection-app/main-features/#supported-file-formats
 
 ## Contact
 
