@@ -27,20 +27,20 @@ Do not edit the generated TOC manually.
 
 - [Overview](#overview)
 - [Features](#features)
-- [Getting Started](#getting-started)
+- [Getting started](#getting-started)
   - [Install a Prebuilt Release (recommended)](#install-a-prebuilt-release-recommended)
-  - [Build and Run Locally (fallback)](#build-and-run-locally-fallback)
-  - [See Also (Documentation)](#see-also-documentation)
-- [Privacy & Data Security](#privacy--data-security)
-- [Models](#models)
-  - [Face Detection Models](#face-detection-models)
+  - [Build and run locally (fallback)](#build-and-run-locally-fallback)
+  - [See also (Documentation)](#see-also-documentation)
+- [Privacy & data security](#privacy--data-security)
+- [Available models](#available-models)
+  - [Face detection](#face-detection)
   - [Hand Detection](#hand-detection)
     - [Linking 100DOH TET model access to the app](#linking-100doh-tet-model-access-to-the-app)
   - [Audio transcription](#audio-transcription)
     - [Speech performance (Windows)](#speech-performance-windows)
-  - [Model Sources](#model-sources)
-- [Value for Developmental Psychologists](#value-for-developmental-psychologists)
-- [Development and Contributions](#development-and-contributions)
+  - [Model sources](#model-sources)
+- [Value for developmental psychologists](#value-for-developmental-psychologists)
+- [Development and contributions](#development-and-contributions)
 - [Contact](#contact)
 - [Funding](#funding)
 
@@ -174,7 +174,7 @@ speech backends fail to start. Installers built after 2026-09-01 detect and
 install it automatically; for older builds, install it manually from
 https://aka.ms/vs/17/release/vc_redist.x64.exe.
 
-### Model Sources
+### Model sources
 - YOLO face weights: https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/v1.0.0-models (originally from https://github.com/akanametov/yolo-face)
 - RetinaFace implementation: https://github.com/serengil/retinaface
 - Hand detection weights: https://github.com/cardiff-babylab/tinyexplorer-detection-app/releases/tag/handobj-weights-v1 (HandObject / 100DOH Faster R‑CNN, originally from https://github.com/ddshan/hand_object_detector)
