@@ -10,6 +10,31 @@
   <em>Main application interface showing file selection, model options, and confidence threshold controls</em>
 </div>
 
+## Table of Contents
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+- [Overview](#overview)
+- [Features](#features)
+- [Getting Started](#getting-started)
+  - [Install a Prebuilt Release (recommended)](#install-a-prebuilt-release-recommended)
+  - [Build and Run Locally (fallback)](#build-and-run-locally-fallback)
+  - [See Also (Documentation)](#see-also-documentation)
+- [Privacy & Data Security](#privacy--data-security)
+- [Face Detection Models](#face-detection-models)
+- [Hand Detection](#hand-detection)
+    - [Linking 100DOH TET model access to the app](#linking-100doh-tet-model-access-to-the-app)
+- [Audio transcription](#audio-transcription)
+    - [Speech performance (Windows)](#speech-performance-windows)
+  - [Model Sources](#model-sources)
+- [Value for Developmental Psychologists](#value-for-developmental-psychologists)
+- [Development and Contributions](#development-and-contributions)
+- [Contact](#contact)
+- [Funding](#funding)
+
+<!-- END doctoc -->
+
 ## Overview
 
 The TinyExplorer Detection App is a user-friendly graphical interface designed with developmental scientists in mind. This toolbox integrates state-of-the-art open-source face recognition algorithms into an easy-to-use software package, streamlining the process of analysing facial data.
